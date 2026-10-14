@@ -27,12 +27,12 @@ function render() {
     <header class="flex items-center gap-2 px-4 pt-4 pb-1">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-muted-foreground"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
       <select id="village" class="bg-transparent font-semibold outline-none"><option value="">All villages</option>${villages.map((v) => `<option ${v === village ? "selected" : ""}>${esc(v)}</option>`).join("")}</select>
-      <button id="who" class="ml-auto flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold" title="Who are you?">${esc(who().slice(0, 2).toUpperCase())}</button>
+      <input id="who" value="${esc(localStorage.getItem("who") ?? "")}" placeholder="Your name" class="ml-auto h-8 w-28 rounded-full bg-muted px-3 text-right text-xs font-semibold outline-none placeholder:font-normal">
     </header>
     <div id="body" class="flex flex-1 flex-col"></div>
     <nav class="flex border-t pb-3 pt-2">${[["task", "Task", '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>'], ["farmer", "Farmer", '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>']].map(([k, l, p]) => `<button data-nav="${k}" class="flex flex-1 flex-col items-center gap-1 text-[11px] ${k === nav ? "text-foreground" : "text-muted-foreground"}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${p}</svg>${l}</button>`).join("")}</nav>`;
   app.querySelector("#village").onchange = (e) => { village = e.target.value; render(); };
-  app.querySelector("#who").onclick = () => { const n = prompt("Your name", who()); if (n) { localStorage.setItem("who", n.trim()); render(); } };
+  app.querySelector("#who").onchange = (e) => localStorage.setItem("who", e.target.value.trim());
   app.querySelectorAll("[data-nav]").forEach((b) => b.onclick = () => { nav = b.dataset.nav; open = null; render(); });
   open ? renderForm() : nav === "farmer" ? renderFarmers() : renderList();
 }

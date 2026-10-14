@@ -107,14 +107,20 @@ async function seasonList() {
   crumbs.textContent = "Season Management";
   const list = await q(db.from("season").select("*").order("created_at", { ascending: false }));
   main.innerHTML = `
-    <div class="mb-4 flex items-center justify-between"><h1 class="text-2xl font-semibold tracking-tight">Season Management</h1><button id="new" class="${ui.btn}">New season</button></div>
+    <div class="mb-4 flex items-center justify-between"><h1 class="text-2xl font-semibold tracking-tight">Season Management</h1></div>
+    ${card("New season", `<form id="new" class="grid items-end gap-3 sm:grid-cols-[1fr_160px_160px_auto]">
+      ${field("Season name", `<input name="name" required placeholder="e.g. Kharif 2026" class="${ui.input}">`)}
+      ${field("Base", `<input name="base" placeholder="e.g. Seoni" class="${ui.input}">`)}
+      ${field("AZ name", `<input name="az_name" placeholder="e.g. ERW" class="${ui.input}">`)}
+      <button class="${ui.btn}">Create season</button></form>`)}
     <div class="${ui.card}"><table class="${ui.table}"><thead><tr class="border-b"><th class="${ui.th}">Season</th><th class="${ui.th}">Base</th><th class="${ui.th}">AZ</th><th class="${ui.th}">Status</th></tr></thead>
       <tbody>${list.map((s) => `<tr class="${ui.tr} cursor-pointer" onclick="location.hash='#/seasons/${s.id}'"><td class="${ui.td} font-medium">${esc(s.name)}</td><td class="${ui.td}">${esc(s.base ?? "")}</td><td class="${ui.td}">${esc(s.az_name ?? "")}</td><td class="${ui.td}"><span class="${s.status === "active" ? ui.badgeOk : ui.badgeSec}">${esc(s.status)}</span></td></tr>`).join("")}</tbody></table>
       ${list.length ? "" : empty("No seasons yet.")}</div>`;
-  main.querySelector("#new").onclick = () => run(async () => {
-    const name = prompt("Season name"); if (!name) return;
-    const s = await q(db.from("season").insert({ name }).select().single()); location.hash = "#/seasons/" + s.id;
-  });
+  main.querySelector("#new").onsubmit = (e) => { e.preventDefault(); run(async () => {
+    const f = Object.fromEntries(new FormData(e.target));
+    const s = await q(db.from("season").insert({ name: f.name.trim(), base: f.base || null, az_name: f.az_name || null }).select().single());
+    location.hash = "#/seasons/" + s.id;
+  }); };
 }
 
 async function seasonPage(id) {
