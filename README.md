@@ -17,8 +17,8 @@ The orchestration runs inside Postgres:
 
 ## Setup
 
-1. Create a Supabase project. In **SQL Editor** run [supabase/schema.sql](supabase/schema.sql), then [supabase/seed.sql](supabase/seed.sql).
-2. Put the project URL and anon key in [src/lib/config.js](src/lib/config.js), or paste them into the setup panel the pages show on first load (stored in the browser).
+1. The Supabase project is connected to this GitHub repo: every push to `main` applies [supabase/migrations](supabase/migrations) to the database (`..._init.sql` is the schema, `..._demo_season.sql` is demo data). `supabase/config.toml` must name the project's Postgres major version. Without the integration, run the migration files in order in the SQL editor.
+2. The project URL and anon key are in [src/lib/config.js](src/lib/config.js); the pages also accept them in a setup panel on first load (stored in the browser).
 3. Serve `src/` from any static host. Locally:
 
 ```bash
