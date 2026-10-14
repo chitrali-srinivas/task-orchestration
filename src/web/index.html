@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mati · Season Orchestration</title>
+  <link rel="stylesheet" href="../lib/style.css">
+  <style>
+    .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+    aside { border-right: 1px solid var(--line); background: var(--panel); padding: 14px; }
+    main { padding: 14px 20px; max-width: 1100px; }
+    .season { padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+    .season.active, .season:hover { background: var(--chip); }
+    .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); background: var(--panel); border-left: 1px solid var(--line); padding: 16px; overflow: auto; z-index: 40; }
+    .rule { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .rule .n { width: 24px; color: var(--muted); }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+    @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } aside { border-right: none; border-bottom: 1px solid var(--line); } }
+  </style>
+</head>
+<body>
+  <div id="app"><p class="empty">Loading…</p></div>
+  <script type="module" src="./web.js"></script>
+</body>
+</html>
