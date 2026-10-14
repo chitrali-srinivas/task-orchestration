@@ -1,10 +1,10 @@
 {
-  "name": "mati-lean",
+  "name": "mati-task-orchestration-engine",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node scripts/serve.mjs 3200",
-    "test": "node scripts/test-schema.mjs"
+    "test": "node scripts/test-flow.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.3"

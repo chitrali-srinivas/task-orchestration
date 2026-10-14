@@ -1,40 +1,39 @@
-# Mati lean — season orchestration on Supabase
+# Mati task orchestration engine
 
-Two static pages, one Postgres schema, no build step.
+Built from the whiteboard: admin configures a season's flow, the backend creates tasks, the surveyor phone shows them.
 
-| URL | Who | What |
-|---|---|---|
-| `/web/` | Admin | Seasons, the **Flow** (rules), tasks with review (approve / report / discard), comments, change log, farmers, templates |
-| `/mobile/` | Surveyor | Village filter, **Pending / Completed / Reported** tabs, fill and resubmit forms, register farmers |
+| URL | Page |
+|---|---|
+| `/web/` | **Admin** — Survey Template List, season (name, country), the Flow as arrows (From → To, Status, Trigger, Validity), Survey Responses with verification, comments and change logs |
+| `/mobile/` | **Surveyor phone** — Task's: Pending / Completed / Reported, fill a form, submit |
 
-The orchestration runs inside Postgres:
+## Backend (Supabase Postgres)
 
-- `seasons.status → active` opens every `season_start` rule for every farmer in the AZ. A farmer added later gets the same.
-- `tasks.status` changes fire the `form_status` rules: open the next form (immediately / after N days / on a date, with an optional close) or end the farmer's journey when a condition on the answers matches (e.g. `eligible eq no`).
-- `submit_response(task, data, by, remarks)` stores the answers, bumps the response version and writes a field-level change log on corrections.
-- `review_task(task, 'approved' | 'reported' | 'discarded', by, comment)` records the review and a comment.
-- Nothing deletes a submission. Ending a journey only cancels tasks that were never submitted.
+`supabase/migrations/20261015000000_init.sql`:
 
-## Setup
+| Table | As drawn |
+|---|---|
+| `survey_template_master` | id, AZ id, version, created/updated at, survey details JSON |
+| `season` | name, country, AZ, base, start, end, status |
+| `season_flow` | one row per arrow: from → to, **Status** that fires it, **Trigger** (immediately / date), **Validity** (indefinite / start–end) |
+| `survey_response` | task id, task type, template id, planned start/end, response version, status, created/updated by/at, response JSON |
+| `response_change_logs` | task id, when, who, before, after, remarks |
+| `comments` | task id, when, who, comment |
 
-1. The Supabase project is connected to this GitHub repo: every push to `main` applies [supabase/migrations](supabase/migrations) to the database (`..._init.sql` is the schema, `..._demo_season.sql` is demo data). `supabase/config.toml` must name the project's Postgres major version. Without the integration, run the migration files in order in the SQL editor.
-2. The project URL and anon key are in [src/lib/config.js](src/lib/config.js); the pages also accept them in a setup panel on first load (stored in the browser).
-3. Serve `src/` from any static host. Locally:
+Task status: `planned → pending verification → verified / algo verified → completed`, or `discarded` / `cancelled`.
+
+How tasks are created:
+- Season set to **active** → every `Start → X` arrow creates task X for each farmer in the AZ. A farmer added later is allocated to the active season and gets the same.
+- A task reaches the arrow's **Status** → the next task is created: planned start = today or the trigger date; planned end = the validity end date or none.
+- An arrow to **End** cancels the farmer's remaining planned tasks.
+
+Phone tabs: Pending = `planned`; Completed = submitted or verified; Reported = `discarded` (verifier sent it back — the surveyor resubmits).
+
+## Run
+
+Migrations are applied by the Supabase GitHub integration on every push to `main`. Locally:
 
 ```bash
-npm run dev
+npm install && npm test        # flow test in an in-process Postgres
+npm run dev                    # http://localhost:3200/web/ and /mobile/
 ```
-
-Then open http://localhost:3200/web/ and http://localhost:3200/mobile/. To deploy, upload `src/` to Vercel / Netlify / Supabase Storage; the two URLs are `<host>/web/` and `<host>/mobile/`.
-
-## Tests
-
-The schema and the whiteboard flow (Registration → Enrollment → Deployment → Engagement/Sample, disqualification, corrections) run in an in-process Postgres:
-
-```bash
-npm install && npm test
-```
-
-## Not yet
-
-Login (the anon key can read and edit everything), file/photo fields, a drawn flow canvas, offline mode. Add those on top; the schema does not need to change for the first three.
