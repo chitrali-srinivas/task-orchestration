@@ -2,8 +2,9 @@
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { join, extname, normalize } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = new URL("../src/", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../src/", import.meta.url));
 const port = Number(process.argv[2] || 3200);
 const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json" };
 
@@ -12,8 +13,9 @@ createServer(async (req, res) => {
   let file = join(root, path);
   try {
     if ((await stat(file)).isDirectory()) file = join(file, "index.html");
+    const body = await readFile(file);
     res.writeHead(200, { "content-type": types[extname(file)] || "application/octet-stream", "cache-control": "no-store" });
-    res.end(await readFile(file));
+    res.end(body);
   } catch {
     res.writeHead(404); res.end("Not found");
   }
