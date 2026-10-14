@@ -1,4 +1,4 @@
--- Demo data: the Kharif ERW season from the whiteboard. Run after schema.sql.
+-- Demo data: the Kharif ERW season from the whiteboard. Drop this migration before going live.
 
 insert into survey_templates (id, name, fields) values
   ('registration', 'Registration', '[

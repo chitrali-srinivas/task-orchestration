@@ -2,7 +2,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { readFile } from "node:fs/promises";
 
-const sql = async (f) => readFile(new URL(`../supabase/${f}`, import.meta.url), "utf8");
+const sql = async (f) => readFile(new URL(`../supabase/migrations/${f}`, import.meta.url), "utf8");
 const pg = new PGlite();
 const one = async (text, params) => (await pg.query(text, params)).rows[0];
 const all = async (text, params) => (await pg.query(text, params)).rows;
@@ -10,8 +10,8 @@ let failed = 0;
 const check = (name, ok, extra = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${name}${extra ? " — " + extra : ""}`); if (!ok) failed++; };
 
 await pg.exec("create role anon; create role authenticated;");
-await pg.exec(await sql("schema.sql"));
-await pg.exec(await sql("seed.sql"));
+await pg.exec(await sql("20261015000000_init.sql"));
+await pg.exec(await sql("20261015000001_demo_season.sql"));
 
 const season = await one("select * from seasons limit 1");
 const tasks = () => all("select farmer_name, template_id, effective_status, closes_at from task_list order by task_no");

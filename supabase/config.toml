@@ -1,0 +1,17 @@
+# Read by the Supabase GitHub integration (and the CLI). Migrations in ./migrations
+# are applied to the linked project on every push to main.
+project_id = "mati-task-orchestration-engine"
+
+[api]
+enabled = true
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+# Must match the linked project's Postgres major version (Dashboard → Settings → Infrastructure).
+major_version = 17
+
+[db.seed]
+# Demo data ships as a migration (20261015000001_demo_season.sql), so no separate seed step.
+enabled = false

@@ -1,5 +1,5 @@
 -- Mati lean season orchestration — Postgres / Supabase schema.
--- Run once in the Supabase SQL editor (then run seed.sql).
+-- Applied by the Supabase GitHub integration on push to main (supabase/migrations).
 --
 -- The orchestration lives in the database:
 --   season start / new farmer      -> tasks for every "season_start" rule
