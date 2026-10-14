@@ -1,5 +1,6 @@
 import { db, q, esc, date, when, toast, run } from "../lib/db.js";
 import { ui, field } from "../lib/ui.js";
+import { templateEditor } from "./template-editor.js";
 
 const main = document.getElementById("main");
 const crumbs = document.getElementById("crumbs");
@@ -10,7 +11,6 @@ const who = () => whoInput.value || "hq";
 const avatar = () => document.getElementById("avatar").textContent = who().slice(0, 2).toUpperCase();
 avatar();
 
-const TYPES = ["text", "number", "date", "select", "yes/no"];
 const opt = (list, sel) => list.map(([v, l]) => `<option value="${esc(v)}" ${v === sel ? "selected" : ""}>${esc(l)}</option>`).join("");
 const empty = (t) => `<p class="py-10 text-center text-sm text-muted-foreground">${t}</p>`;
 const card = (title, body, desc = "", right = "") =>
@@ -24,7 +24,7 @@ function route() {
   const [, section = "templates", id] = location.hash.split("/");
   document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("bg-sidebar-accent", a.dataset.nav === section));
   document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("font-medium", a.dataset.nav === section));
-  run(() => ({ templates: id ? templateEditor : templateList, seasons: id ? seasonPage : seasonList })[section](id));
+  run(() => ({ templates: id ? (i) => templateEditor(main, crumbs, i) : templateList, seasons: id ? seasonPage : seasonList })[section](id));
 }
 
 // ───────── Survey Templates ─────────
@@ -42,64 +42,6 @@ async function templateList() {
   };
   draw();
   main.querySelector("#search").oninput = (e) => draw(e.target.value);
-}
-
-async function templateEditor(id) {
-  const t = id === "new" ? { name: "", az_name: "", questions: [], statuses: ["planned", "collected"] }
-                         : await q(db.from("survey_template_master").select("*").eq("id", id).single());
-  crumbs.innerHTML = `<a href="#/templates" class="hover:text-foreground">Survey Templates</a> <span class="mx-1">›</span> ${id === "new" ? "New" : esc(t.name)}`;
-  const draw = () => {
-    main.innerHTML = `
-      <div class="mb-4 flex items-center justify-between"><h1 class="text-2xl font-semibold tracking-tight">${id === "new" ? "New survey template" : esc(t.name)}</h1><button id="save" class="${ui.btn}">Save</button></div>
-      ${card("Survey", `<div class="grid gap-4 sm:grid-cols-[1fr_200px]">${field("Survey name", `<input id="name" value="${esc(t.name)}" class="${ui.input}">`)}${field("AZ", `<input id="az" value="${esc(t.az_name ?? "")}" class="${ui.input}">`)}</div>`)}
-      ${card("Questions", `
-        <div class="hidden sm:grid grid-cols-[2fr_130px_80px_2fr_36px_36px] gap-2 pb-2 text-xs font-medium text-muted-foreground"><span>Question</span><span>Type</span><span>Required</span><span>Options (for select)</span><span></span><span></span></div>
-        ${t.questions.map((qn, i) => `
-          <div class="grid grid-cols-2 sm:grid-cols-[2fr_130px_80px_2fr_36px_36px] items-center gap-2 py-1" data-i="${i}">
-            <input data-f="label" value="${esc(qn.label)}" placeholder="Question" class="${ui.input}">
-            <select data-f="type" class="${ui.select}">${opt(TYPES.map((x) => [x, x]), qn.type)}</select>
-            <label class="flex items-center justify-center"><input type="checkbox" data-f="required" ${qn.required ? "checked" : ""} class="h-4 w-4 rounded border-input accent-primary"></label>
-            <input data-f="options" value="${esc((qn.options ?? []).join(", "))}" placeholder="a, b, c" class="${ui.input}" ${qn.type === "select" ? "" : "disabled"}>
-            <button data-adv="${i}" title="Settings" class="${ui.icon}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
-            <button data-del="${i}" title="Remove" class="${ui.icon} text-muted-foreground">✕</button>
-            ${qn._adv ? `<div class="col-span-full grid gap-3 rounded-md bg-muted p-3 sm:grid-cols-4">
-              ${field("Key", `<input data-f="key" value="${esc(qn.key)}" class="${ui.input} bg-background">`)}
-              ${field("Min", `<input data-f="min" type="number" value="${esc(qn.min ?? "")}" class="${ui.input} bg-background">`)}
-              ${field("Max", `<input data-f="max" type="number" value="${esc(qn.max ?? "")}" class="${ui.input} bg-background">`)}
-              ${field("Help text", `<input data-f="help" value="${esc(qn.help ?? "")}" class="${ui.input} bg-background">`)}</div>` : ""}
-          </div>`).join("")}
-        <button id="addQ" class="${ui.outline} mt-2">+ Add question</button>`)}
-      ${card("Survey statuses", `
-        <div class="mb-3 flex flex-wrap gap-2">${t.statuses.map((s, i) => `<span class="${ui.badgeSec} gap-1 py-1">${i + 1}. ${esc(s)}<button data-ds="${i}" class="ml-1 text-muted-foreground hover:text-foreground">✕</button></span>`).join("")}</div>
-        <div class="flex gap-2"><input id="newStatus" placeholder="Add a status, e.g. verified" class="${ui.input} max-w-xs"><button id="addS" class="${ui.outline}">Add</button></div>`,
-        "1st = when the task is created · 2nd = after the surveyor submits · the rest are set by the verifier. Season Management uses these to trigger the next survey.")}`;
-    const read = () => { t.name = main.querySelector("#name").value; t.az_name = main.querySelector("#az").value; readQuestions(); };
-    const readQuestions = () => main.querySelectorAll("[data-i]").forEach((row) => {
-      const qn = t.questions[row.dataset.i];
-      row.querySelectorAll("[data-f]").forEach((el) => qn[el.dataset.f] = el.type === "checkbox" ? el.checked : el.value);
-      qn.options = qn.type === "select" ? String(qn.options ?? "").split(",").map((s) => s.trim()).filter(Boolean) : undefined;
-      qn.key = qn.key || qn.label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
-    });
-    const addStatus = () => { const v = main.querySelector("#newStatus").value.trim(); if (v) { read(); t.statuses.push(v); draw(); } };
-    main.querySelector("#addQ").onclick = () => { read(); t.questions.push({ label: "", type: "text", required: false, key: "" }); draw(); };
-    main.querySelectorAll("[data-del]").forEach((b) => b.onclick = () => { read(); t.questions.splice(b.dataset.del, 1); draw(); });
-    main.querySelectorAll("[data-adv]").forEach((b) => b.onclick = () => { read(); t.questions[b.dataset.adv]._adv = !t.questions[b.dataset.adv]._adv; draw(); });
-    main.querySelectorAll("[data-f=type]").forEach((s) => s.onchange = () => { read(); draw(); });
-    main.querySelectorAll("[data-ds]").forEach((b) => b.onclick = () => { read(); t.statuses.splice(b.dataset.ds, 1); draw(); });
-    main.querySelector("#addS").onclick = addStatus;
-    main.querySelector("#newStatus").onkeydown = (e) => e.key === "Enter" && addStatus();
-    main.querySelector("#save").onclick = () => run(async () => {
-      read();
-      const row = { name: t.name.trim(), az_name: t.az_name.trim() || null, statuses: t.statuses, updated_at: new Date().toISOString(),
-                    questions: t.questions.map(({ _adv, ...qn }) => ({ ...qn, min: qn.min === "" ? undefined : qn.min, max: qn.max === "" ? undefined : qn.max })) };
-      if (!row.name) throw new Error("Give the survey a name");
-      if (row.statuses.length < 2) throw new Error("A survey needs at least two statuses (created, submitted)");
-      const saved = await q(id === "new" ? db.from("survey_template_master").insert(row).select().single()
-                                         : db.from("survey_template_master").update(row).eq("id", id).select().single());
-      toast("Saved"); location.hash = "#/templates/" + saved.id;
-    });
-  };
-  draw();
 }
 
 // ───────── Season Management ─────────
