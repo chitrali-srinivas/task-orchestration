@@ -3,28 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Surveyor · Tasks</title>
-  <link rel="stylesheet" href="../lib/style.css">
-  <style>
-    body { background: var(--panel); }
-    .phone { max-width: 430px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; }
-    @media (min-width: 500px) { .phone { margin: 16px auto; min-height: calc(100vh - 32px); border: 1px solid var(--line); border-radius: 24px; } }
-    header { display: flex; align-items: center; padding: 14px 16px 4px; }
-    header select { width: auto; border: none; background: none; font-weight: 600; padding: 0; }
-    .sr { margin-left: auto; width: 32px; height: 32px; border-radius: 50%; background: var(--box); display: grid; place-items: center; font-size: 12px; font-weight: 600; }
-    .title { font-size: 20px; padding: 6px 16px 0; }
-    .tabs { margin: 0 16px 8px; }
-    .list { flex: 1; padding: 0 16px; }
-    .task { background: var(--box); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; font-size: 12px; cursor: pointer; }
-    .task .top { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); }
-    nav { display: flex; border-top: 1px solid var(--line); padding: 8px 0 12px; }
-    nav button { flex: 1; border: none; background: none; font-size: 11px; display: grid; justify-items: center; color: var(--muted); }
-    nav button.active { color: var(--text); }
-    nav button span { font-size: 20px; }
-  </style>
+  <title>Mati Carbon · Surveyor</title>
+  <link rel="stylesheet" href="../lib/tokens.css">
+  <script src="https://cdn.tailwindcss.com/3.4.5"></script>
+  <script src="../lib/theme.js"></script>
 </head>
-<body>
-  <div id="app" class="phone"><p class="empty">Loading…</p></div>
+<body class="bg-muted/40 text-sm">
+  <div id="app" class="mx-auto flex min-h-screen w-full max-w-[430px] flex-col bg-background sm:my-4 sm:min-h-[calc(100vh-2rem)] sm:rounded-[2rem] sm:border sm:shadow-lg">
+    <p class="py-12 text-center text-muted-foreground">Loading…</p>
+  </div>
   <script type="module" src="./mobile.js"></script>
 </body>
 </html>

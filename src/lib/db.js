@@ -14,8 +14,11 @@ export const date = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "
 export const when = (d) => new Date(d).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export function toast(msg, isError) {
-  const el = Object.assign(document.createElement("div"), { className: "toast" + (isError ? " error" : ""), textContent: msg });
+  const el = Object.assign(document.createElement("div"), {
+    className: "toast rounded-md px-4 py-2 text-sm shadow-lg " + (isError ? "bg-destructive text-destructive-foreground" : "bg-primary text-primary-foreground"),
+    textContent: msg,
+  });
   document.body.appendChild(el);
-  setTimeout(() => el.remove(), 3000);
+  setTimeout(() => el.remove(), 3500);
 }
 export const run = (fn) => fn().catch((e) => toast(e.message, true));
