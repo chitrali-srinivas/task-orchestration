@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin · Season orchestration</title>
+  <link rel="stylesheet" href="../lib/style.css">
+  <style>
+    .layout { display: grid; grid-template-columns: 220px 1fr; gap: 16px; padding: 16px; max-width: 1200px; }
+    .arrow { display: grid; grid-template-columns: 24px 1fr auto; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); align-items: start; }
+    .node { display: inline-block; border: 1px solid var(--text); border-radius: 6px; padding: 2px 8px; background: var(--panel); }
+    .node.end { border-radius: 999px; background: var(--red); color: #fff; border-color: transparent; }
+    .node.start { border-radius: 999px; background: var(--green); color: #fff; border-color: transparent; }
+    .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); background: var(--panel); border-left: 1px solid var(--line); padding: 16px; overflow: auto; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0 12px; }
+    @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div id="app" class="layout"><p class="empty">Loading…</p></div>
+  <script type="module" src="./web.js"></script>
+</body>
+</html>
