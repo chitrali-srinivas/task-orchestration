@@ -1,55 +1,55 @@
-// Walks the whiteboard flow in an in-process Postgres (PGlite). Run: npm test
+// Creates templates, a season and a flow the way HQ Admin would, then walks it. Run: npm test
 import { PGlite } from "@electric-sql/pglite";
 import { readFile } from "node:fs/promises";
 
 const pg = new PGlite();
 const rows = async (q, p) => (await pg.query(q, p)).rows;
+const one = async (q, p) => (await rows(q, p))[0];
 const iso = (d) => new Date(d).toISOString().slice(0, 10);
 let failed = 0;
 const check = (name, ok, detail = "") => { console.log(`${ok ? "ok  " : "FAIL"} ${name}${detail && " — " + detail}`); if (!ok) failed++; };
 
 await pg.exec("create role anon; create role authenticated;");
-for (const f of ["20261015000000_init.sql", "20261015000001_demo_season.sql"])
-  await pg.exec(await readFile(new URL(`../supabase/migrations/${f}`, import.meta.url), "utf8"));
+await pg.exec(await readFile(new URL("../supabase/migrations/20261015000000_init.sql", import.meta.url), "utf8"));
 
-const tasks = (farmer) => rows("select task_type, status, planned_start_date, planned_end_date from survey_response r join farmer f on f.id = r.farmer_id where f.name = $1 order by task_no", [farmer]);
-const task = async (farmer, type) => (await rows("select task_id from survey_response r join farmer f on f.id = r.farmer_id where f.name = $1 and task_type = $2", [farmer, type]))[0].task_id;
+// HQ Admin: two templates with their own statuses, one season, three arrows.
+const reg = (await one("insert into survey_template_master (name, questions, statuses) values ('Registration', '[{\"key\":\"name\",\"label\":\"Name\",\"type\":\"text\"}]', '{planned,collected,verified,rejected}') returning id")).id;
+const enr = (await one("insert into survey_template_master (name, questions, statuses) values ('Enrollment', '[{\"key\":\"acres\",\"label\":\"Acres\",\"type\":\"number\"}]', '{planned,collected,approved,disqualified}') returning id")).id;
+const dep = (await one("insert into survey_template_master (name, statuses) values ('Deployment', '{planned,collected,verified}') returning id")).id;
+const season = (await one("insert into season (name, base, az_name) values ('Kharif 2026', 'Seoni', 'ERW') returning id")).id;
+await pg.query("insert into season_flow (season_id, from_template, to_template, position) values ($1, null, $2, 1)", [season, reg]);
+await pg.query("insert into season_flow (season_id, from_template, to_template, on_status, position) values ($1, $2, $3, 'collected', 2)", [season, reg, enr]);
+await pg.query("insert into season_flow (season_id, from_template, to_template, on_status, delay_days, end_date, position) values ($1, $2, $3, 'approved', 7, '2026-12-31', 3)", [season, enr, dep]);
 
-let t = await rows("select count(*)::int as n from survey_response where task_type = 'Registration' and status = 'planned'");
-check("Start: Registration planned for all 3 farmers", t[0].n === 3);
+await pg.query("insert into farmer (name, village, base, az_name) values ('Srinivas', 'Achalpur', 'Seoni', 'ERW')");
+check("no tasks before the season starts", (await rows("select 1 from survey_response")).length === 0);
 
-await pg.query("select submit_response($1, $2, 'dilip')", [await task("Srinivas", "Registration"), { name: "Srinivas", mobile: "9800000001" }]);
-t = await tasks("Srinivas");
-check("Registration submitted → pending verification, Enrollment planned", t[1]?.task_type === "Enrollment" && t[0].status === "pending verification", JSON.stringify(t));
+await pg.query("update season set status = 'active' where id = $1", [season]);
+const tasks = () => rows("select task_type, status, planned_start_date, planned_end_date from survey_response order by task_no");
+let t = await tasks();
+check("Start → Registration task in the survey's first status", t.length === 1 && t[0].task_type === "Registration" && t[0].status === "planned", JSON.stringify(t));
 
-const enr = await task("Srinivas", "Enrollment");
-await pg.query("select submit_response($1, $2, 'dilip')", [enr, { land_acres: 5, eligible: "yes" }]);
-await pg.query("select verify_task($1, 'discarded', 'srinivas', '@dilip the data is wrong')", [enr]);
-await pg.query("select submit_response($1, $2, 'dilip', 'corrected')", [enr, { land_acres: 6, eligible: "yes" }]);
-const log = await rows("select who, before, after, remarks from response_change_logs where task_id = $1 and before ? 'land_acres'", [enr]);
-check("resubmit logs before/after with remarks", log.length === 1 && log[0].before.land_acres === 5 && log[0].after.land_acres === 6 && log[0].remarks === "corrected", JSON.stringify(log));
-check("response version is 2", (await rows("select response_version from survey_response where task_id = $1", [enr]))[0].response_version === 2);
-check("comment stored", (await rows("select comment from comments where task_id = $1", [enr])).length === 1);
+const task = async (type) => (await one("select task_id from survey_response where task_type = $1", [type])).task_id;
+await pg.query("select submit_response($1, $2, 'dilip')", [await task("Registration"), { name: "Srinivas" }]);
+t = await tasks();
+check("submit → second status, and the 'collected' arrow creates Enrollment", t[0].status === "collected" && t[1]?.task_type === "Enrollment", JSON.stringify(t));
 
-await pg.query("select verify_task($1, 'verified', 'srinivas')", [enr]);
-t = await tasks("Srinivas");
-const dep = t.find((x) => x.task_type === "Deployment");
-check("Enrollment verified → Deployment planned on trigger date, ends on valid_to", dep && iso(dep.planned_start_date) === "2026-07-01" && iso(dep.planned_end_date) === "2026-12-31", JSON.stringify(dep));
+await pg.query("select submit_response($1, $2, 'dilip')", [await task("Enrollment"), { acres: 5 }]);
+await pg.query("select set_status($1, 'disqualified', 'hq', 'not eligible')", [await task("Enrollment")]);
+check("a status with no arrow creates nothing", (await tasks()).length === 2);
 
-await pg.query("select submit_response($1, $2, 'dilip')", [await task("Srinivas", "Deployment"), { tons: 5, date: "2026-07-02" }]);
-await pg.query("select verify_task($1, 'verified', 'srinivas')", [await task("Srinivas", "Deployment")]);
-t = await tasks("Srinivas");
-check("Deployment verified → Engagement 1 and Sample 1 planned", ["Engagement 1", "Sample 1"].every((n) => t.some((x) => x.task_type === n && x.status === "planned")), JSON.stringify(t.map((x) => x.task_type)));
+await pg.query("select submit_response($1, $2, 'dilip', 'corrected')", [await task("Enrollment"), { acres: 6 }]);
+const log = await rows("select before, after, remarks from response_change_logs where task_id = $1 and before ? 'acres'", [await task("Enrollment")]);
+check("resubmit logs before/after + remarks, version 2", log.length === 1 && log[0].before.acres === 5 && log[0].after.acres === 6 && (await one("select response_version from survey_response where task_id = $1", [await task("Enrollment")])).response_version === 2, JSON.stringify(log));
 
-// Ramesh is disqualified at Enrollment → End.
-await pg.query("select submit_response($1, $2, 'dilip')", [await task("Ramesh", "Registration"), { name: "Ramesh" }]);
-await pg.query("select submit_response($1, $2, 'dilip')", [await task("Ramesh", "Enrollment"), { eligible: "no" }]);
-await pg.query("select verify_task($1, 'discarded', 'srinivas', 'not eligible')", [await task("Ramesh", "Enrollment")]);
-t = await tasks("Ramesh");
-check("Enrollment discarded → End: no Deployment, nothing planned", !t.some((x) => x.task_type === "Deployment") && !t.some((x) => x.status === "planned"), JSON.stringify(t));
+await pg.query("select set_status($1, 'approved', 'hq')", [await task("Enrollment")]);
+t = await tasks();
+const d = t.find((x) => x.task_type === "Deployment");
+check("approved → Deployment after 7 days, ends 2026-12-31", d && iso(d.planned_start_date) === iso(Date.now() + 7 * 864e5) && iso(d.planned_end_date) === "2026-12-31", JSON.stringify(d));
 
-await pg.query("insert into farmer (name, village, az_id) values ('Geeta', 'Achalpur', 'ERW')");
-check("new farmer is allocated to the active season and gets Registration", (await tasks("Geeta")).length === 1);
+await pg.query("insert into farmer (name, base, az_name) values ('Geeta', 'Seoni', 'ERW')");
+check("a farmer added later gets the Start task", (await rows("select 1 from survey_response r join farmer f on f.id = r.farmer_id where f.name = 'Geeta'")).length === 1);
+check("comment stored", (await rows("select 1 from comments")).length === 1);
 
 console.log(failed ? `\n${failed} failed` : "\nall checks passed");
 process.exit(failed ? 1 : 0);
