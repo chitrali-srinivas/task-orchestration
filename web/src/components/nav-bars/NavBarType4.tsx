@@ -278,7 +278,7 @@ function AppSidebar({
         <Sidebar collapsible="icon" className="bg-white border-r group/nav" {...props}>
             {/* Collapse / expand: appears when hovering the sidebar (the rail on the edge toggles it too) */}
             <SidebarTrigger
-                className="absolute right-1 top-2 z-10 h-6 w-6 text-zinc-400 opacity-0 transition-opacity hover:text-zinc-900 group-hover/nav:opacity-100 group-data-[collapsible=icon]:hidden"
+                className="absolute right-1 top-2 z-10 h-6 w-6 text-zinc-400 opacity-0 transition-opacity hover:text-zinc-900 group-hover/nav:opacity-100 group-data-[collapsible=icon]:static group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:mt-2"
             />
             <SidebarHeader className="bg-white">
                 <SidebarMenu>
