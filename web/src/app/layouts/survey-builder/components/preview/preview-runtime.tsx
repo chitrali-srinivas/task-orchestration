@@ -560,42 +560,78 @@ export function PreviewAllQuestions({
     const title = (q: QuestionModel) => q.titles[locale] || q.titles[defaultLocale] || Object.values(q.titles)[0] || "";
     const hint = (q: QuestionModel) => q.descriptions?.[locale] || q.descriptions?.[defaultLocale] || "";
 
-    const block = (q: QuestionModel, nested = false) => {
-        const children = q.repeater?.isRepeater
-            ? (q.repeater.childQuestionIds || []).map((id) => survey.questions.find((x) => x.id === id)).filter(Boolean) as QuestionModel[]
-            : [];
-        return (
-            <div
-                key={q.id}
-                onClick={() => onSelectQuestion?.(q.id)}
-                className={cn(
-                    "rounded-lg border p-3 space-y-2 cursor-pointer transition-colors",
-                    selectedQuestionId === q.id
-                        ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50/60 dark:bg-zinc-900"
-                        : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-400",
-                    nested && "bg-zinc-50/40 dark:bg-zinc-900/40"
-                )}
-            >
-                <div className="flex items-center gap-1.5">
-                    <span className="font-mono text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-1.5 py-0.5 rounded">
-                        Q{q.displayIndex || q.number}
-                    </span>
-                    {q.validation?.required && <span className="text-[10px] text-rose-600 dark:text-rose-400 font-medium">* Required</span>}
-                </div>
-                <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 leading-snug">{title(q) || <span className="italic text-zinc-400">Untitled question</span>}</p>
-                {hint(q) && <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{hint(q)}</p>}
-                <div onClick={(e) => e.stopPropagation()}>
-                    {renderPreviewField(q, runtimeAnswers[q.id], (val) => onChangeAnswer(q.id, val), locale, () => {})}
-                </div>
-                {children.length > 0 && (
-                    <div className="space-y-2 pt-1">
-                        <p className="text-[10px] uppercase tracking-wide text-zinc-400">Asked once per entry</p>
-                        {children.map((c) => block(c, true))}
-                    </div>
-                )}
-            </div>
-        );
+    // How many times a repeater block repeats: its own answer, another question's answer, or a fixed count.
+    const repeatCount = (q: QuestionModel) => {
+        const r = q.repeater!;
+        if (r.countSourceType === "fixed") return Math.max(0, Number(r.fixedCount) || 0);
+        const src = r.countQuestionId && r.countQuestionId !== q.id ? runtimeAnswers[r.countQuestionId] : runtimeAnswers[q.id];
+        return Math.min(50, Math.max(0, Number(src) || 0));
     };
+    const entryLabel = (q: QuestionModel, i: number) => (q.repeater?.itemLabelTemplate || "Entry #{index}").replace("#{index}", String(i + 1));
+
+    const card = (q: QuestionModel, value: any, onChange: (v: any) => void, visibleAnswers: Record<string, any>, nested: boolean, children?: React.ReactNode) => (
+        <div
+            key={q.id}
+            onClick={() => onSelectQuestion?.(q.id)}
+            className={cn(
+                "rounded-lg border p-3 space-y-2 cursor-pointer transition-colors",
+                selectedQuestionId === q.id
+                    ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50/60 dark:bg-zinc-900"
+                    : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-400",
+                nested && "bg-white dark:bg-zinc-950"
+            )}
+        >
+            <div className="flex items-center gap-1.5">
+                <span className="font-mono text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-1.5 py-0.5 rounded">
+                    Q{q.displayIndex || q.number}
+                </span>
+                {q.validation?.required && <span className="text-[10px] text-rose-600 dark:text-rose-400 font-medium">* Required</span>}
+            </div>
+            <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 leading-snug">{title(q) || <span className="italic text-zinc-400">Untitled question</span>}</p>
+            {hint(q) && <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{hint(q)}</p>}
+            <div onClick={(e) => e.stopPropagation()}>{renderPreviewField(q, value, onChange, locale, () => {})}</div>
+            {children}
+        </div>
+    );
+
+    // A repeater: the count field, then one entry per count, each holding the block's questions with their own answers.
+    const repeaterBlock = (q: QuestionModel) => {
+        const children = (q.repeater?.childQuestionIds || [])
+            .map((id) => survey.questions.find((x) => x.id === id))
+            .filter(Boolean) as QuestionModel[];
+        const count = repeatCount(q);
+        const entries = Array.from({ length: count }, (_, i) => {
+            // Answers scoped to this entry so conditional logic inside the block works per entry.
+            const scoped: Record<string, any> = { ...runtimeAnswers };
+            Object.keys(runtimeAnswers).forEach((k) => {
+                if (k.endsWith(`_inst_${i}`)) scoped[k.replace(`_inst_${i}`, "")] = runtimeAnswers[k];
+            });
+            const visible = children.filter((c) => isQuestionVisible(c, scoped));
+            return (
+                <div key={`${q.id}_entry_${i}`} className="rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+                    <div className="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 text-[11px] font-semibold text-zinc-700 dark:text-zinc-200">{entryLabel(q, i)}</div>
+                    <div className="p-2 space-y-2">
+                        {visible.length === 0 ? (
+                            <p className="text-[11px] italic text-zinc-400">No questions in this block yet.</p>
+                        ) : (
+                            visible.map((c) => card(c, runtimeAnswers[`${c.id}_inst_${i}`], (v) => onChangeAnswer(`${c.id}_inst_${i}`, v), scoped, true))
+                        )}
+                    </div>
+                </div>
+            );
+        });
+        return card(q, runtimeAnswers[q.id], (v) => onChangeAnswer(q.id, v), runtimeAnswers, false, (
+            <div className="space-y-2 pt-1">
+                <p className="text-[10px] uppercase tracking-wide text-zinc-400">
+                    {count === 0 ? "Enter a count above to add entries" : `${count} ${count === 1 ? "entry" : "entries"}`}
+                </p>
+                {entries}
+            </div>
+        ));
+    };
+
+    const block = (q: QuestionModel) =>
+        q.repeater?.isRepeater ? repeaterBlock(q) : card(q, runtimeAnswers[q.id], (v) => onChangeAnswer(q.id, v), runtimeAnswers, false);
 
     return (
         <div className="h-full overflow-y-auto p-3 space-y-3 bg-white dark:bg-zinc-950">
