@@ -6,7 +6,12 @@
  * a task per farmer when the workflow's condition is met.
  */
 
-export type TriggerType = "immediately" | "days" | "date";
+/**
+ * When the next task is created once the condition is met:
+ *  immediately – the same day; days – n days later; date – a fixed date;
+ *  field – n days after a date the surveyor entered in the previous survey.
+ */
+export type TriggerType = "immediately" | "days" | "date" | "field";
 
 export interface WorkflowStep {
     id: string;
@@ -21,6 +26,10 @@ export interface WorkflowStep {
     days?: number;
     /** For trigger "date": the date the task is created (YYYY-MM-DD). */
     date?: string;
+    /** For trigger "field": id of the Date question in the parent survey whose answer is the base date (+ days). */
+    fieldQuestionId?: string;
+    /** Label of that question, kept for display. */
+    fieldLabel?: string;
     /** Validity window for the task (YYYY-MM-DD). Both empty = indefinite. */
     validFrom?: string;
     validTo?: string;
@@ -90,6 +99,7 @@ export function describeStep(step: WorkflowStep): string {
     if (step.trigger === "immediately") parts.push("trigger: immediately");
     if (step.trigger === "days") parts.push(`trigger: after ${step.days ?? 0} day${step.days === 1 ? "" : "s"}`);
     if (step.trigger === "date") parts.push(`trigger: ${step.date || "date"}`);
+    if (step.trigger === "field") parts.push(`trigger: ${step.fieldLabel || "survey date"} + ${step.days ?? 0} day${step.days === 1 ? "" : "s"}`);
     parts.push(step.validFrom || step.validTo ? `validity: ${step.validFrom || "…"} – ${step.validTo || "…"}` : "validity: indefinite");
     return parts.join(" · ");
 }

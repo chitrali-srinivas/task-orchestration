@@ -5,7 +5,7 @@
  */
 
 import { Workflow, loadWorkflows } from "@/app/layouts/survey-workflow/workflow-store";
-import { Farmer, STATUS, Task, expireTasks, nextTasks, rootTasks } from "./engine";
+import { Farmer, QuestionRef, STATUS, Task, expireTasks, farmerFromResponse, nextTasks, rootTasks } from "./engine";
 
 const TASKS_KEY = "mati.tasks";
 const FARMERS_KEY = "mati.farmers";
@@ -59,14 +59,16 @@ export function refreshTasks(today: string): Task[] {
 }
 
 /**
- * Surveyor registers a farmer in a village by filling the workflow's first survey.
- * Creates the farmer, the registration task (already collected, with the response),
- * then lets the engine create whatever follows "collected" in the workflow.
+ * Surveyor registers a farmer by filling the workflow's first survey (nothing else is asked).
+ * The farmer's name and village are read from the answers. Creates the farmer, the registration
+ * task (already collected, with the response), then lets the engine create whatever follows
+ * "collected" in the workflow.
  */
-export function registerFarmer(input: { workflow: Workflow; rootStepId: string; name: string; village: string; response: Record<string, unknown>; today: string }) {
+export function registerFarmer(input: { workflow: Workflow; rootStepId: string; questions: QuestionRef[]; response: Record<string, unknown>; today: string }) {
     const now = nowIso();
     const farmers = loadFarmers();
-    const farmer: Farmer = { id: `farmer_${Date.now()}`, name: input.name, village: input.village, createdAt: now };
+    const { name, village } = farmerFromResponse(input.questions, input.response, `Farmer ${farmers.length + 1}`);
+    const farmer: Farmer = { id: `farmer_${Date.now()}`, name, village, createdAt: now };
     saveFarmers([...farmers, farmer]);
 
     let tasks = loadTasks();

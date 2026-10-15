@@ -34,7 +34,8 @@ Phone / HQ ──────► status changes on tasks
 - **`web/src/lib/orchestration/engine.ts`** — pure functions, no clock/storage: `rootTasks` (registration), `nextTasks` (follow the arrows whose `onStatus` matches the task's new status; idempotent per farmer+step; End creates nothing), `expireTasks` (planned + past validity → expired), `isPendingOnApp` (planned and started). Tests: `node --test src/lib/orchestration/engine.test.ts`.
 - **`web/src/lib/orchestration/store.ts`** — the only place that reads the clock and storage: `registerFarmer`, `submitTask`, `changeStatus`, `refreshTasks`.
 - **Task** = one survey for one farmer: `T<n>`, workflow step, survey template, farmer, status, planned start/end, parent task, response.
-- **Trigger** → planned start: immediately = the day the condition was met; after n days; on a date. A validity start later than that wins; validity end expires the task.
+- **Trigger** → planned start: immediately = the day the condition was met; after n days; on a date; or n days after a **date answered in the previous survey** (e.g. sowing date + 30; falls back to the condition day if unanswered). A validity start later than that wins; validity end expires the task.
+- **Registration** = filling the workflow's first survey on the phone, nothing else. The farmer's name and village are read from its answers (questions whose column name or title says "name" / "village"; otherwise the first text answer is the name).
 - **Today** is a simulated date (shared by the phone and the task summary) so day-based triggers and expiry can be tried by hand.
 
 ## Legacy (`src/`, Supabase)

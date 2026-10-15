@@ -113,7 +113,7 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, onTasks, onFarmers
 
     const surveyById = useMemo(() => new Map(surveys.map((s) => [s.id, s])), [surveys]);
     const farmerById = useMemo(() => new Map(farmers.map((f) => [f.id, f])), [farmers]);
-    const villages = Array.from(new Set(farmers.map((f) => f.village))).sort();
+    const villages = Array.from(new Set(farmers.map((f) => f.village).filter(Boolean))).sort();
     const inVillage = (farmerId: string) => village === "all" || farmerById.get(farmerId)?.village === village;
 
     const pending = tasks.filter((t) => isPendingOnApp(t, today) && inVillage(t.farmerId)).sort((a, b) => a.taskNo - b.taskNo);
@@ -202,13 +202,15 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, onTasks, onFarmers
         const rootStep = workflow?.steps.find((st) => st.parentId === null);
         const s = rootStep ? surveyById.get(rootStep.surveyId) : undefined;
         return (
-            <RegisterFarmer
+            <SurveyForm
+                title={s ? `Survey: ${s.name}` : "Register farmer"}
+                subtitle="New farmer"
                 survey={s}
-                villages={villages}
-                disabledReason={!workflow ? "No workflow." : !rootStep ? "The workflow has no first survey after Start." : !s ? "The first survey of the workflow no longer exists." : ""}
+                submitLabel="Register"
+                emptyMessage={!workflow ? "No workflow." : !rootStep ? "The workflow has no first survey after Start." : "The first survey of the workflow no longer exists."}
                 onBack={() => setScreen({ name: "farmers" })}
-                onSubmit={(name, vil, answers) => {
-                    const res = registerFarmer({ workflow: workflow!, rootStepId: rootStep!.id, name, village: vil, response: answers, today });
+                onSubmit={(answers) => {
+                    const res = registerFarmer({ workflow: workflow!, rootStepId: rootStep!.id, questions: s!.questions, response: answers, today });
                     onFarmers([...farmers, res.farmer]);
                     onTasks(res.tasks);
                     setVillage("all");
@@ -237,7 +239,7 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, onTasks, onFarmers
                         list.map((f) => (
                             <div key={f.id} className="rounded-lg bg-zinc-100 p-3 dark:bg-zinc-900">
                                 <div className="text-xs font-semibold">{f.name}</div>
-                                <div className="text-[11px] text-zinc-500">{f.village} · {tasks.filter((t) => t.farmerId === f.id).length} tasks</div>
+                                <div className="text-[11px] text-zinc-500">{f.village || "No village"} · {tasks.filter((t) => t.farmerId === f.id).length} tasks</div>
                             </div>
                         ))
                     )}
@@ -275,7 +277,7 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, onTasks, onFarmers
 
 /* ------------------------------ Forms ------------------------------ */
 
-function SurveyForm({ title, subtitle, survey, onBack, onSubmit }: { title: string; subtitle?: string; survey?: SurveyModel; onBack: () => void; onSubmit: (answers: Record<string, unknown>) => void }) {
+function SurveyForm({ title, subtitle, survey, submitLabel, emptyMessage, onBack, onSubmit }: { title: string; subtitle?: string; survey?: SurveyModel; submitLabel?: string; emptyMessage?: string; onBack: () => void; onSubmit: (answers: Record<string, unknown>) => void }) {
     const [answers, setAnswers] = useState<Record<string, any>>({});
     return (
         <div className="flex h-full flex-col">
@@ -288,48 +290,9 @@ function SurveyForm({ title, subtitle, survey, onBack, onSubmit }: { title: stri
             </div>
             <div className="min-h-0 flex-1">
                 {survey ? (
-                    <PreviewAllQuestions survey={survey} locale={survey.defaultLocale || "en"} runtimeAnswers={answers} onChangeAnswer={(id, v) => setAnswers((a) => ({ ...a, [id]: v }))} onSubmit={() => onSubmit(answers)} />
+                    <PreviewAllQuestions survey={survey} locale={survey.defaultLocale || "en"} runtimeAnswers={answers} onChangeAnswer={(id, v) => setAnswers((a) => ({ ...a, [id]: v }))} onSubmit={() => onSubmit(answers)} submitLabel={submitLabel} />
                 ) : (
-                    <p className="p-6 text-center text-xs text-rose-600">Survey template not found.</p>
-                )}
-            </div>
-        </div>
-    );
-}
-
-function RegisterFarmer({ survey, villages, disabledReason, onBack, onSubmit }: { survey?: SurveyModel; villages: string[]; disabledReason: string; onBack: () => void; onSubmit: (name: string, village: string, answers: Record<string, unknown>) => void }) {
-    const [name, setName] = useState("");
-    const [village, setVillage] = useState("");
-    const [answers, setAnswers] = useState<Record<string, any>>({});
-    const ready = name.trim() && village.trim() && !disabledReason;
-    return (
-        <div className="flex h-full flex-col">
-            <div className="flex items-center gap-2 border-b border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
-                <button type="button" onClick={onBack} className="rounded p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"><ArrowLeft className="h-4 w-4" /></button>
-                <div className="text-xs font-bold">Register farmer{survey ? ` · ${survey.name}` : ""}</div>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-                <div className="space-y-2 p-3">
-                    <div className="space-y-1">
-                        <Label htmlFor="rf-village" className="text-[11px] font-semibold">Village</Label>
-                        <Input id="rf-village" list="rf-villages" value={village} onChange={(e) => setVillage(e.target.value)} placeholder="e.g. Achalpur" className="h-8 text-xs" />
-                        <datalist id="rf-villages">{villages.map((v) => <option key={v} value={v} />)}</datalist>
-                    </div>
-                    <div className="space-y-1">
-                        <Label htmlFor="rf-name" className="text-[11px] font-semibold">Farmer name</Label>
-                        <Input id="rf-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Srinivas" className="h-8 text-xs" />
-                    </div>
-                    {disabledReason && <p className="text-[11px] text-rose-600">{disabledReason}</p>}
-                </div>
-                {survey && (
-                    <PreviewAllQuestions
-                        survey={survey}
-                        locale={survey.defaultLocale || "en"}
-                        runtimeAnswers={answers}
-                        onChangeAnswer={(id, v) => setAnswers((a) => ({ ...a, [id]: v }))}
-                        onSubmit={ready ? () => onSubmit(name.trim(), village.trim(), answers) : undefined}
-                        submitLabel="Register"
-                    />
+                    <p className="p-6 text-center text-xs text-rose-600">{emptyMessage || "Survey template not found."}</p>
                 )}
             </div>
         </div>
