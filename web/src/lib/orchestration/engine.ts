@@ -56,10 +56,25 @@ export function addDays(ymd: string, n: number): string {
     return d.toISOString().slice(0, 10);
 }
 
-/** Day the task for `step` is created, counting from `today` (the day the condition was met). */
-export function plannedStartFor(step: WorkflowStep, today: string): string {
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A date answer from a survey response: Date questions store "YYYY-MM-DD", DateRange stores {start,end}. */
+export function dateFromResponse(response: Record<string, unknown> | undefined, questionId: string | undefined): string | undefined {
+    if (!response || !questionId) return undefined;
+    const v = response[questionId];
+    const s = typeof v === "string" ? v : v && typeof v === "object" && typeof (v as { start?: unknown }).start === "string" ? (v as { start: string }).start : undefined;
+    return s && YMD.test(s) ? s : undefined;
+}
+
+/**
+ * Day the task for `step` is created, counting from `today` (the day the condition was met).
+ * For trigger "field" the base is a date answered in the previous survey (`parentResponse`);
+ * if that answer is missing the condition day is used instead.
+ */
+export function plannedStartFor(step: WorkflowStep, today: string, parentResponse?: Record<string, unknown>): string {
     if (step.trigger === "days") return addDays(today, step.days ?? 0);
     if (step.trigger === "date" && step.date) return step.date;
+    if (step.trigger === "field") return addDays(dateFromResponse(parentResponse, step.fieldQuestionId) ?? today, step.days ?? 0);
     return today;
 }
 
@@ -93,7 +108,7 @@ export function nextTasks({ workflow, task, existing, today, nextTaskNo, newId, 
     children.forEach((step) => {
         const dup = existing.some((t) => t.farmerId === task.farmerId && t.stepId === step.id) || out.some((t) => t.stepId === step.id);
         if (dup) return;
-        const window = validityFor(step, plannedStartFor(step, today));
+        const window = validityFor(step, plannedStartFor(step, today, task.response));
         out.push({
             id: newId(out.length),
             taskNo: nextTaskNo + out.length,
@@ -142,4 +157,34 @@ export function expireTasks(tasks: Task[], today: string, now: string): Task[] {
 /** What the phone shows: planned tasks that have started. Future-dated tasks stay hidden until their day. */
 export function isPendingOnApp(task: Task, today: string): boolean {
     return task.status === STATUS.planned && task.plannedStart <= today;
+}
+
+/** A question as the engine needs it to read a registration response. */
+export interface QuestionRef {
+    id: string;
+    columnName?: string;
+    titles?: Record<string, string>;
+}
+
+function answerText(v: unknown): string {
+    if (typeof v === "string" || typeof v === "number") return String(v).trim();
+    if (Array.isArray(v)) return v.map(answerText).filter(Boolean).join(", ");
+    if (v && typeof v === "object") {
+        const o = v as { displayValue?: unknown; start?: unknown };
+        if (typeof o.displayValue === "string") return o.displayValue;
+        if (typeof o.start === "string") return o.start;
+    }
+    return "";
+}
+
+/**
+ * Farmer name and village from the first survey's answers: the question whose column name or
+ * title mentions "name" / "village" wins; otherwise the first text answer is the name.
+ */
+export function farmerFromResponse(questions: QuestionRef[], response: Record<string, unknown>, fallbackName: string): { name: string; village: string } {
+    const find = (re: RegExp) => questions.find((q) => re.test(q.columnName || "") || re.test(q.titles?.en || ""));
+    const pick = (q?: QuestionRef) => (q ? answerText(response[q.id]) : "");
+    const name = pick(find(/name/i)) || questions.map((q) => pick(q)).find(Boolean) || fallbackName;
+    const village = pick(find(/village/i));
+    return { name, village };
 }

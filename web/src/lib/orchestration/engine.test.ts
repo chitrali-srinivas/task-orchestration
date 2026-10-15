@@ -1,7 +1,7 @@
 // Run: node --test src/lib/orchestration/engine.test.ts   (Node 24 strips types natively)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addDays, expireTasks, isPendingOnApp, nextTasks, rootTasks, type Task } from "./engine.ts";
+import { addDays, expireTasks, farmerFromResponse, isPendingOnApp, nextTasks, rootTasks, type Task } from "./engine.ts";
 
 const wf = {
     id: "wf1",
@@ -16,6 +16,7 @@ const wf = {
         { id: "end", surveyId: "__end__", parentId: "reg", onStatus: "cancelled", trigger: "immediately" as const },
         { id: "dep", surveyId: "s_dep", parentId: "enr", onStatus: "verified", trigger: "days" as const, days: 7, validTo: "2026-12-31" },
         { id: "smp", surveyId: "s_smp", parentId: "enr", onStatus: "verified", trigger: "date" as const, date: "2026-11-20" },
+        { id: "eng", surveyId: "s_eng", parentId: "dep", onStatus: "collected", trigger: "field" as const, fieldQuestionId: "q_sowing", days: 30 },
     ],
 };
 const ids = (p: string) => (i: number) => `${p}${i}`;
@@ -61,4 +62,24 @@ test("future tasks are hidden on the app until their day; planned tasks expire a
 
 test("addDays crosses month ends", () => {
     assert.equal(addDays("2026-10-28", 7), "2026-11-04");
+});
+
+test("field trigger: n days after a date answered in the previous survey, else after the condition day", () => {
+    const dep: Task = { id: "d", taskNo: 3, workflowId: "wf1", stepId: "dep", surveyId: "s_dep", farmerId: "f1", status: "collected", plannedStart: "2026-10-22", createdAt: "", updatedAt: "", response: { q_sowing: "2026-11-05" } };
+    const withDate = nextTasks({ ...base, today: "2026-11-10", task: dep, existing: [dep], nextTaskNo: 4, newId: ids("n") });
+    assert.deepEqual(withDate.map((t) => [t.surveyId, t.plannedStart]), [["s_eng", "2026-12-05"]]);
+
+    const noAnswer = nextTasks({ ...base, today: "2026-11-10", task: { ...dep, response: {} }, existing: [dep], nextTaskNo: 4, newId: ids("n") });
+    assert.equal(noAnswer[0].plannedStart, "2026-12-10");
+
+    const range = nextTasks({ ...base, today: "2026-11-10", task: { ...dep, response: { q_sowing: { start: "2026-11-01", end: "2026-11-03" } } }, existing: [dep], nextTaskNo: 4, newId: ids("n") });
+    assert.equal(range[0].plannedStart, "2026-12-01");
+});
+
+test("farmer name and village come from the registration answers", () => {
+    const qs = [{ id: "q1", columnName: "farmer_name", titles: { en: "Farmer name" } }, { id: "q2", columnName: "village", titles: { en: "Village" } }, { id: "q3", columnName: "mobile" }];
+    assert.deepEqual(farmerFromResponse(qs, { q1: "Srinivas", q2: { masterSetId: "villages", recordId: "v1", displayValue: "Achalpur" } }, "Farmer 1"), { name: "Srinivas", village: "Achalpur" });
+    // No name/village question: first text answer is the name, village empty.
+    assert.deepEqual(farmerFromResponse([{ id: "q3", columnName: "mobile" }], { q3: "9800000000" }, "Farmer 1"), { name: "9800000000", village: "" });
+    assert.deepEqual(farmerFromResponse([{ id: "q3", columnName: "mobile" }], {}, "Farmer 7"), { name: "Farmer 7", village: "" });
 });

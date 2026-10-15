@@ -20,7 +20,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SurveyService } from "../survey-builder/services/survey-service";
-import { DEFAULT_SURVEY_STATUSES, SurveyModel } from "../survey-builder/types/survey-schema";
+import { DEFAULT_SURVEY_STATUSES, QuestionModel, SurveyModel } from "../survey-builder/types/survey-schema";
 import {
     END_SURVEY_ID,
     TriggerType,
@@ -339,6 +339,11 @@ function WorkflowEditor({ workflow, surveys, onChange, onBack }: EditorProps) {
                     state={dialog}
                     surveys={surveys}
                     parentStatuses={statusesOf(dialog.mode === "add" ? parentSurveyId(dialog.parentId) : parentSurveyId(dialog.step.parentId))}
+                    parentQuestions={(() => {
+                        const pid = dialog.mode === "add" ? dialog.parentId : dialog.step.parentId;
+                        const sid = pid ? parentSurveyId(pid) : null;
+                        return sid ? surveyById.get(sid)?.questions || [] : [];
+                    })()}
                     parentLabel={(() => {
                         const pid = dialog.mode === "add" ? dialog.parentId : dialog.step.parentId;
                         return pid ? surveyName(parentSurveyId(pid) || "") : "Start";
@@ -358,13 +363,15 @@ interface StepDialogProps {
     state: StepDialogState;
     surveys: SurveyModel[];
     parentStatuses: string[];
+    /** Questions of the previous survey: Date ones can be the base for the "field" trigger. */
+    parentQuestions: QuestionModel[];
     parentLabel: string;
     onSave: (step: WorkflowStep) => void;
     onDelete?: () => void;
     onClose: () => void;
 }
 
-function StepDialog({ state, surveys, parentStatuses, parentLabel, onSave, onDelete, onClose }: StepDialogProps) {
+function StepDialog({ state, surveys, parentStatuses, parentQuestions, parentLabel, onSave, onDelete, onClose }: StepDialogProps) {
     const initial: WorkflowStep =
         state.mode === "edit"
             ? state.step
@@ -373,11 +380,14 @@ function StepDialog({ state, surveys, parentStatuses, parentLabel, onSave, onDel
     const set = (patch: Partial<WorkflowStep>) => setDraft((d) => ({ ...d, ...patch }));
     const isEnd = draft.surveyId === END_SURVEY_ID;
     const afterStart = draft.parentId === null;
+    const dateQuestions = parentQuestions.filter((q) => q.type === "Date" || q.type === "DateRange");
+    const qLabel = (q: QuestionModel) => q.titles.en || Object.values(q.titles)[0] || q.columnName || q.id;
     const canSave =
         Boolean(draft.surveyId) &&
         (afterStart || Boolean(draft.onStatus)) &&
         (draft.trigger !== "days" || (draft.days ?? -1) >= 0) &&
-        (draft.trigger !== "date" || Boolean(draft.date));
+        (draft.trigger !== "date" || Boolean(draft.date)) &&
+        (draft.trigger !== "field" || (Boolean(draft.fieldQuestionId) && (draft.days ?? -1) >= 0));
 
     return (
         <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -428,6 +438,7 @@ function StepDialog({ state, surveys, parentStatuses, parentLabel, onSave, onDel
                                             <SelectItem value="immediately" className="text-xs">Immediately</SelectItem>
                                             <SelectItem value="days" className="text-xs">After n days</SelectItem>
                                             <SelectItem value="date" className="text-xs">On a date</SelectItem>
+                                            {!afterStart && <SelectItem value="field" className="text-xs">n days after a date in {parentLabel}</SelectItem>}
                                         </SelectContent>
                                     </Select>
                                     {draft.trigger === "days" && (
@@ -436,7 +447,29 @@ function StepDialog({ state, surveys, parentStatuses, parentLabel, onSave, onDel
                                     {draft.trigger === "date" && (
                                         <Input type="date" value={draft.date || ""} onChange={(e) => set({ date: e.target.value })} className="h-9 text-xs" />
                                     )}
+                                    {draft.trigger === "field" && (
+                                        <Input type="number" min={0} value={draft.days ?? ""} onChange={(e) => set({ days: e.target.value === "" ? undefined : Number(e.target.value) })} placeholder="Days after" className="h-9 text-xs" />
+                                    )}
                                 </div>
+                                {draft.trigger === "field" && (
+                                    dateQuestions.length === 0 ? (
+                                        <p className="text-[11px] text-rose-600">{parentLabel} has no Date question. Add one in the Survey Builder first.</p>
+                                    ) : (
+                                        <Select
+                                            value={draft.fieldQuestionId || ""}
+                                            onValueChange={(id) => set({ fieldQuestionId: id, fieldLabel: qLabel(dateQuestions.find((q) => q.id === id)!) })}
+                                        >
+                                            <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Date question in the previous survey…" /></SelectTrigger>
+                                            <SelectContent>
+                                                {dateQuestions.map((q) => (
+                                                    <SelectItem key={q.id} value={q.id} className="text-xs">
+                                                        Q{q.displayIndex || q.number} · {qLabel(q)} <span className="font-mono text-zinc-400">({q.columnName})</span>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )
+                                )}
                             </div>
 
                             <div className="space-y-1">
