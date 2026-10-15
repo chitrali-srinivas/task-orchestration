@@ -13,7 +13,6 @@ import {
     HelpCircle,
     Bug,
     Info,
-    ArrowUpRightFromCircle,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -305,7 +304,6 @@ function AppSidebar({
                                         <span className="truncate font-semibold text-zinc-900 leading-tight">Mati Carbon</span>
                                         <span className="truncate text-xs text-zinc-500 font-normal leading-tight">Franchise name</span>
                                     </div>
-                                    <ArrowUpRightFromCircle className="ml-auto h-3.5 w-3.5 text-zinc-400 group-hover:text-zinc-900 transition-colors" />
                                 </SidebarMenuButton>
                             </DialogTrigger>
                             <DialogContent 
