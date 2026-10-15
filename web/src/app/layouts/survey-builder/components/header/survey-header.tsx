@@ -21,6 +21,7 @@ import {
     FolderKanban,
     Copy,
     Settings2,
+    Pencil,
     Clock,
     LayoutGrid,
     Table,
@@ -238,49 +239,16 @@ export function SurveyHeader({
                                         <ChevronDown className="h-3.5 w-3.5 text-zinc-400 group-hover:text-zinc-700 dark:group-hover:text-zinc-200 shrink-0" />
                                     </div>
 
-                                    {/* Consolidated Sub-line metadata */}
-                                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400 font-medium flex-wrap mt-0.5">
-                                        {/* AZ Zone */}
-                                        <span className="font-mono text-zinc-700 dark:text-zinc-300 font-semibold">{survey.azId}</span>
-                                        <span className="text-zinc-300 dark:text-zinc-700">•</span>
-
-                                        {/* Version */}
-                                        <span className="font-mono font-medium text-zinc-700 dark:text-zinc-300">{survey.versionTag}</span>
-
-                                        {/* Status Text only with color */}
+                                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400 font-medium mt-0.5">
+                                        <span className="font-mono text-zinc-700 dark:text-zinc-300">{survey.versionTag}</span>
                                         <span
                                             className={cn(
-                                                "font-semibold text-[11px]",
-                                                isPublished
-                                                    ? "text-emerald-600 dark:text-emerald-400"
-                                                    : "text-amber-600 dark:text-amber-400"
+                                                "font-semibold",
+                                                isPublished ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
                                             )}
                                         >
                                             {survey.status}
                                         </span>
-
-                                        {/* Category / App Path */}
-                                        {categoryDef && (
-                                            <>
-                                                <span className="text-zinc-300 dark:text-zinc-700 hidden sm:inline">•</span>
-                                                <span
-                                                    className="text-zinc-600 dark:text-zinc-400 truncate max-w-[160px] hidden sm:inline"
-                                                    title={`App Location: ${categoryDef.appPath.join(" → ")}`}
-                                                >
-                                                    {categoryDef.name}
-                                                </span>
-                                            </>
-                                        )}
-
-                                        {/* Questions Count */}
-                                        <span className="text-zinc-300 dark:text-zinc-700 hidden md:inline">•</span>
-                                        <span className="text-zinc-500 dark:text-zinc-400 hidden md:inline">{survey.questions.length} questions</span>
-
-                                        {/* Languages Count */}
-                                        <span className="text-zinc-300 dark:text-zinc-700 hidden lg:inline">•</span>
-                                        <span className="text-zinc-500 dark:text-zinc-400 hidden lg:inline">{localesCount} {localesCount === 1 ? "lang" : "langs"}</span>
-
-                                        {/* Save state */}
                                         <span className="text-zinc-300 dark:text-zinc-700">•</span>
                                         {isSaving ? (
                                             <span className="flex items-center gap-1 text-zinc-400 font-mono text-[10px]">
@@ -296,8 +264,7 @@ export function SurveyHeader({
                                             </span>
                                         ) : (
                                             <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 text-[10px] font-medium">
-                                                <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-                                                Saved {lastSavedAt ? lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "now"}
+                                                <Check className="h-3 w-3" /> Saved
                                             </span>
                                         )}
                                     </div>
@@ -330,6 +297,19 @@ export function SurveyHeader({
                             ))}
                         </DropdownMenuContent>
                     </DropdownMenu>
+
+                    {onOpenEditDetails && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            title="Edit survey"
+                            onClick={onOpenEditDetails}
+                            className="h-7 w-7 shrink-0 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+                        >
+                            <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                    )}
                 </div>
 
                 {/* Center / Right: Builder vs Table View Switcher */}
