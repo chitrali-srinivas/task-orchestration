@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { SurveyModel, DEFAULT_SURVEY_STATUSES } from "../../types/survey-schema";
-import { CATEGORY_REGISTRY, getCategoryPath } from "../../lib/category-registry";
 import { AZOption } from "../../services/mock-surveys";
 
 interface EditSurveyDetailsDialogProps {
@@ -52,7 +51,6 @@ export function EditSurveyDetailsDialog({
 
     const [name, setName] = useState(survey.name);
     const [description, setDescription] = useState(survey.description || "");
-    const [category, setCategory] = useState(survey.category || "Field Operations");
     const [defaultLocale, setDefaultLocale] = useState(survey.defaultLocale || "en");
     const [azId, setAzId] = useState(survey.azId || "");
     const [statuses, setStatuses] = useState<string[]>(survey.statuses?.length ? survey.statuses : [...DEFAULT_SURVEY_STATUSES]);
@@ -64,7 +62,6 @@ export function EditSurveyDetailsDialog({
         if (open) {
             setName(survey.name);
             setDescription(survey.description || "");
-            setCategory(survey.category || "Field Operations");
             setDefaultLocale(survey.defaultLocale || "en");
             setAzId(survey.azId || "");
             setStatuses(survey.statuses?.length ? survey.statuses : [...DEFAULT_SURVEY_STATUSES]);
@@ -97,10 +94,6 @@ export function EditSurveyDetailsDialog({
             return;
         }
 
-        if (!category || !category.trim()) {
-            setError("Survey category is required. Please select a category.");
-            return;
-        }
 
         if (statuses.length < 2) {
             setError("A survey needs at least two statuses: one for when a task is created and one for when it is submitted.");
@@ -113,7 +106,6 @@ export function EditSurveyDetailsDialog({
             await onSaveDetails({
                 name: name.trim(),
                 description: description.trim() || undefined,
-                category: category.trim(),
                 defaultLocale,
                 azId,
                 statuses,
@@ -223,44 +215,6 @@ export function EditSurveyDetailsDialog({
                             </div>
                         </div>
 
-                        {/* Category & App Location Panel */}
-                        <div className="space-y-1.5">
-                            <Label htmlFor="edit-cat" className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                                Category <span className="text-rose-500">*</span>
-                            </Label>
-                            <Select value={category || undefined} onValueChange={setCategory} disabled={isPublished}>
-                                <SelectTrigger id="edit-cat" className="bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 h-9 text-xs">
-                                    <SelectValue placeholder="Select Category" />
-                                </SelectTrigger>
-                                <SelectContent className="text-xs">
-                                    {CATEGORY_REGISTRY.map((cat) => (
-                                        <SelectItem key={cat.id} value={cat.name}>
-                                            {cat.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-
-                            {/* App Location Info Panel */}
-                            <div className="p-2.5 rounded-md bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 space-y-1 mt-1">
-                                <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">
-                                    App Location
-                                </span>
-                                <div className="flex items-center gap-1.5 font-mono text-[11px] font-semibold text-zinc-800 dark:text-zinc-200">
-                                    {getCategoryPath(category) ? (
-                                        getCategoryPath(category)?.map((crumb, idx, arr) => (
-                                            <React.Fragment key={crumb}>
-                                                <span>{crumb}</span>
-                                                {idx < arr.length - 1 && <span className="text-zinc-400">→</span>}
-                                            </React.Fragment>
-                                        ))
-                                    ) : (
-                                        <span className="text-zinc-400 font-normal italic">Select a category to view its assigned application path.</span>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
                         <div className="space-y-1.5">
                             <Label htmlFor="edit-desc" className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                                 Description
@@ -345,7 +299,7 @@ export function EditSurveyDetailsDialog({
                         <Button
                             type="submit"
                             size="sm"
-                            disabled={isSaving || isPublished || !name.trim() || !category.trim()}
+                            disabled={isSaving || isPublished || !name.trim()}
                             className="h-8 px-3.5 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 disabled:opacity-50"
                         >
                             {isSaving ? "Saving..." : "Save Changes"}
