@@ -90,73 +90,6 @@ export function BasicSettingsTab({
                 </div>
                 {/* Regional-language titles are managed on the Translation tab. */}
 
-                {/* Required toggle */}
-                <div className="flex items-center gap-3">
-                    <Label htmlFor="q-required" className="w-20 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                        Required
-                    </Label>
-                    <Switch
-                        id="q-required"
-                        checked={Boolean(question.validation.required)}
-                        disabled={isPublished}
-                        onCheckedChange={(checked) =>
-                            onChangeQuestion({
-                                ...question,
-                                validation: {
-                                    ...question.validation,
-                                    required: checked,
-                                },
-                            })
-                        }
-                    />
-                </div>
-
-                {/* Validation (regex) toggle: switching it on opens the pattern dialog */}
-                <div className="flex items-center gap-3">
-                    <Label htmlFor="q-validation" className="w-20 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                        Validation
-                    </Label>
-                    <Switch
-                        id="q-validation"
-                        checked={hasRegex}
-                        disabled={isPublished}
-                        onCheckedChange={(checked) => {
-                            if (checked) {
-                                setRegexDialogOpen(true);
-                            } else {
-                                onChangeQuestion({
-                                    ...question,
-                                    validation: {
-                                        ...question.validation,
-                                        regexPattern: undefined,
-                                        presetId: undefined,
-                                        validationPresetId: undefined,
-                                        patternDescription: undefined,
-                                        customErrorMessage: undefined,
-                                    },
-                                });
-                            }
-                        }}
-                    />
-                    {hasRegex && (
-                        <button
-                            type="button"
-                            disabled={isPublished}
-                            onClick={() => setRegexDialogOpen(true)}
-                            className="min-w-0 truncate font-mono text-[11px] text-zinc-500 underline-offset-2 hover:text-zinc-900 hover:underline dark:hover:text-zinc-100"
-                            title="Edit pattern"
-                        >
-                            {question.validation.regexPattern}
-                        </button>
-                    )}
-                </div>
-                <RegexValidationDialog
-                    open={regexDialogOpen}
-                    onOpenChange={setRegexDialogOpen}
-                    question={question}
-                    onChangeQuestion={onChangeQuestion}
-                />
-
                 {/* Question type & database column */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Question Type Switcher */}
@@ -224,6 +157,73 @@ export function BasicSettingsTab({
                         )}
                     </div>
                 </div>
+
+                {/* Required toggle */}
+                <div className="flex items-center gap-3">
+                    <Label htmlFor="q-required" className="w-20 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                        Required
+                    </Label>
+                    <Switch
+                        id="q-required"
+                        checked={Boolean(question.validation.required)}
+                        disabled={isPublished}
+                        onCheckedChange={(checked) =>
+                            onChangeQuestion({
+                                ...question,
+                                validation: {
+                                    ...question.validation,
+                                    required: checked,
+                                },
+                            })
+                        }
+                    />
+                </div>
+
+                {/* Validation (regex) toggle: switching it on opens the pattern dialog */}
+                <div className="flex items-center gap-3">
+                    <Label htmlFor="q-validation" className="w-20 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                        Validation
+                    </Label>
+                    <Switch
+                        id="q-validation"
+                        checked={hasRegex}
+                        disabled={isPublished}
+                        onCheckedChange={(checked) => {
+                            if (checked) {
+                                setRegexDialogOpen(true);
+                            } else {
+                                onChangeQuestion({
+                                    ...question,
+                                    validation: {
+                                        ...question.validation,
+                                        regexPattern: undefined,
+                                        presetId: undefined,
+                                        validationPresetId: undefined,
+                                        patternDescription: undefined,
+                                        customErrorMessage: undefined,
+                                    },
+                                });
+                            }
+                        }}
+                    />
+                    {hasRegex && (
+                        <button
+                            type="button"
+                            disabled={isPublished}
+                            onClick={() => setRegexDialogOpen(true)}
+                            className="min-w-0 truncate font-mono text-[11px] text-zinc-500 underline-offset-2 hover:text-zinc-900 hover:underline dark:hover:text-zinc-100"
+                            title="Edit pattern"
+                        >
+                            {question.validation.regexPattern}
+                        </button>
+                    )}
+                </div>
+                <RegexValidationDialog
+                    open={regexDialogOpen}
+                    onOpenChange={setRegexDialogOpen}
+                    question={question}
+                    onChangeQuestion={onChangeQuestion}
+                />
             </div>
         </div>
     );
