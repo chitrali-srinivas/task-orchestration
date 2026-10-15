@@ -85,14 +85,29 @@ export function BasicSettingsTab({
                     />
                 </div>
                 {/* Regional-language titles are managed on the Translation tab. */}
-            </div>
 
-            {/* Type & Schema Identification Card */}
-            <div className="p-5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xs space-y-4">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                    Question Type & Database Column
-                </h3>
+                {/* Required toggle */}
+                <div className="flex items-center justify-between">
+                    <Label htmlFor="q-required" className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                        Required
+                    </Label>
+                    <Switch
+                        id="q-required"
+                        checked={Boolean(question.validation.required)}
+                        disabled={isPublished}
+                        onCheckedChange={(checked) =>
+                            onChangeQuestion({
+                                ...question,
+                                validation: {
+                                    ...question.validation,
+                                    required: checked,
+                                },
+                            })
+                        }
+                    />
+                </div>
 
+                {/* Question type & database column */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Question Type Switcher */}
                     <div className="space-y-1.5">
@@ -158,37 +173,6 @@ export function BasicSettingsTab({
                             </p>
                         )}
                     </div>
-                </div>
-            </div>
-
-            {/* Constraints & Flags Card */}
-            <div className="p-5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xs space-y-4">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                    Mandatory Response Rules
-                </h3>
-
-                <div className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-950/60">
-                    <div className="space-y-0.5">
-                        <span className="font-semibold text-xs text-zinc-900 dark:text-zinc-100 block">
-                            Required / Mandatory Response
-                        </span>
-                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                            Surveyors cannot proceed to next step or submit form without answering.
-                        </p>
-                    </div>
-                    <Switch
-                        checked={Boolean(question.validation.required)}
-                        disabled={isPublished}
-                        onCheckedChange={(checked) =>
-                            onChangeQuestion({
-                                ...question,
-                                validation: {
-                                    ...question.validation,
-                                    required: checked,
-                                },
-                            })
-                        }
-                    />
                 </div>
             </div>
         </div>
