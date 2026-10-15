@@ -27,7 +27,7 @@ import { MobilePreview } from "../components/preview/mobile-preview";
 import { SurveyHeader } from "../components/header/survey-header";
 import { VersionHistorySheet } from "../components/versioning/version-history-sheet";
 import { SurveyHubView } from "../components/hub/survey-hub-view";
-import { SurveyTableView } from "../components/table-view/survey-table-view";
+import { TranslationTableView } from "../components/table-view/translation-table-view";
 import { EditSurveyDetailsDialog } from "../components/header/edit-survey-details-dialog";
 import { AvailabilityManagerDialog } from "../components/scheduling/availability-manager-dialog";
 
@@ -531,11 +531,11 @@ export default function SurveyBuilderPage() {
                                 setLanguageManagerOpen={setLanguageManagerOpen}
                             />
 
-                            {/* TABLE VIEW vs BUILDER VIEW */}
+                            {/* TRANSLATIONS vs BUILDER VIEW */}
                             {currentView === "table" ? (
                                 <div className="flex-1 flex flex-row min-h-0 h-[calc(100vh-120px)] max-h-[calc(100vh-120px)] overflow-hidden w-full">
                                     <div className="flex-1 min-w-0 h-full max-h-full overflow-hidden flex flex-col">
-                                        <SurveyTableView
+                                        <TranslationTableView
                                             survey={currentSurvey}
                                             onUpdateSurvey={(updated) => {
                                                 setCurrentSurvey(updated);
@@ -544,8 +544,6 @@ export default function SurveyBuilderPage() {
                                             }}
                                             onOpenLanguageManager={() => setLanguageManagerOpen(true)}
                                             isPublished={currentSurvey.status === "Published"}
-                                            selectedQuestionId={selectedQuestionId}
-                                            onSelectQuestion={(qId) => setSelectedQuestionId(qId)}
                                         />
                                     </div>
 
