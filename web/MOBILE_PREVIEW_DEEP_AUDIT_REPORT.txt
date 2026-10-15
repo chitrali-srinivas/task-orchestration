@@ -1,0 +1,194 @@
+================================================================================
+SURVEY BUILDER V1.1 — MOBILE PREVIEW DEEP AUDIT REPORT
+================================================================================
+Date: September 22, 2026
+Environment: Local Development / Webpack-Vite React 19
+Browser: Chromium 128 / WebKit / Blink Simulation
+Viewport / Emulation: 390x844 (iPhone 14/15), 412x915 (Pixel 7), 375x812 (iPhone X)
+Route: /survey-builder-simplified (src/app/layouts/survey-builder-simplified/)
+Scope: Mobile Preview / Runtime Preview Experience (components/preview/)
+Mode: AUDIT ONLY (Read-Only)
+
+--------------------------------------------------------------------------------
+1. EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+This deep product audit investigates the Mobile Preview / Runtime Preview system
+of Survey Builder V1.1 (src/app/layouts/survey-builder-simplified/components/preview/).
+The Mobile Preview represents the mission-critical respondent experience for field
+enumerators and farmers on mobile devices.
+
+Summary of Audit Findings:
+* Critical Navigation Bug Root Cause Identified (MOBILE-NAV-001 - P0 Blocker):
+  - In PreviewRuntime (preview-runtime.tsx, lines 97-106), an active useEffect
+    watches [selectedQuestionId, visibleQuestions]. When a respondent answers a
+    question in the preview or when conditional questions appear/disappear,
+    runtimeAnswers updates in the parent page, recomputing visibleQuestions.
+  - Because visibleQuestions receives a new array reference on every answer
+    mutation, the effect immediately executes:
+    setCurrentQuestionIndex(visibleQuestions.findIndex(q => q.id === selectedQuestionId))
+  - Since selectedQuestionId remains pinned to whichever question was selected in
+    the desktop builder (e.g. Q1), answering Q2, Q3, or any follow-up question
+    immediately forces currentQuestionIndex back to Q1 (0), resetting the screen
+    to Q1's default state or jumping backward.
+* Index-Based Navigation vs Dynamic Question Sequence (MOBILE-NAV-002 - P1 Critical):
+  - Runtime navigation relies on integer pointer arithmetic (currentQuestionIndex + 1)
+    rather than tracking the active question by stable questionId. When answers
+    dynamically expand or contract the visibleQuestions array (via follow-ups or
+    visibility rules), the active pointer shifts under the user's feet.
+* Repeater Instance State & Navigation Desync (MOBILE-REPEATER-001 - P1 Critical):
+  - When completing the final question of a repeated section (e.g. Plot 1 of 2),
+    activeRepeaterTab increments and forces currentQuestionIndex to the first child
+    index. However, if the first child is conditionally hidden in Plot 2, findIndex
+    returns -1, freezing navigation.
+* Component Remounting & Local State Disconnect (MOBILE-STATE-001 - P2 Major):
+  - In preview-polygon.tsx, vertices are initialized in local useState without
+    syncing with the incoming value prop across Next/Previous transitions.
+* Accessibility & Touch Constraints (MOBILE-A11Y-001, MOBILE-UI-001 - P2 Major):
+  - Top navigation in the smartphone simulator lacks ARIA live announcements on
+    question transitions, and radio button tap targets fall below the 44x44px
+    WCAG touch target guideline.
+
+--------------------------------------------------------------------------------
+2. MOBILE PREVIEW ARCHITECTURE
+--------------------------------------------------------------------------------
+1. Current Question Source of Truth:
+   Integer currentQuestionIndex pointing into derived visibleQuestions array
+   (preview-runtime.tsx, line 65).
+2. Answer Data Source of Truth:
+   runtimeAnswers dictionary stored in page.tsx (line 80) and updated via
+   onChangeAnswer(questionId, value).
+3. Visible Questions Source of Truth:
+   useMemo filter evaluating isQuestionVisible(q, runtimeAnswers) against all
+   survey.questions (preview-runtime.tsx, lines 76-94).
+4. Follow-Up Relationships:
+   Declarative evaluation in lib/logic-evaluator.ts matching parent trigger
+   rules and conjunction groups.
+5. Repeater Instances:
+   Scoped keys in runtimeAnswers formatted as ${questionId}_inst_${activeRepeaterTab}.
+6. Navigation Triggers:
+   handleNext (line 146) and handleBack (line 274) calculating index offsets.
+7. Component Mounting:
+   Direct invocation of renderPreviewField(activeQuestion, currentAnswer, ...)
+   without React key boundaries on the card wrapper.
+
+--------------------------------------------------------------------------------
+3. CRITICAL NEXT / PREVIOUS INVESTIGATION (ROOT CAUSE)
+--------------------------------------------------------------------------------
+Finding: MOBILE-NAV-001 (Severity: P0 Blocker)
+
+Concrete Reproduction Sequence:
+1. In the desktop Survey Builder, select Q1 in the left question list (selectedQuestionId = "q_1").
+2. Look at the Mobile Preview on the right: Q1 ("Are you a farmer?") is displayed at currentQuestionIndex = 0.
+3. Click Next on the Mobile Preview:
+   - handleNext increments currentQuestionIndex to 1.
+   - The preview correctly displays Q2 ("What is your farm size in acres?").
+   - Crucial note: selectedQuestionId in page.tsx is still "q_1" because handleNext only updates local index state.
+4. On Q2, the user enters an answer (e.g. types 25 or clicks a choice).
+5. The input calls onChangeAnswer("q_2", 25).
+6. Parent page.tsx executes setRuntimeAnswers(prev => ({ ...prev, q_2: 25 })).
+7. PreviewRuntime re-renders with the updated runtimeAnswers prop.
+8. visibleQuestions useMemo executes and generates a NEW ARRAY REFERENCE.
+9. The useEffect at lines 97-106 fires because visibleQuestions is in its dependency array:
+   useEffect(() => {
+       if (!selectedQuestionId) return;
+       const targetIdx = visibleQuestions.findIndex((q) => q.id === selectedQuestionId);
+       if (targetIdx !== -1) {
+           setCurrentQuestionIndex(targetIdx);
+           setIsSubmitted(false);
+           setValidationError(null);
+       }
+   }, [selectedQuestionId, visibleQuestions]);
+10. selectedQuestionId is "q_1". targetIdx evaluates to 0.
+11. setCurrentQuestionIndex(0) is invoked!
+12. ACTUAL OBSERVED BEHAVIOR: The user typed an answer into Q2, and the screen
+    IMMEDIATELY SNAPPED BACK TO Q1 IN ITS DEFAULT STATE.
+
+Recommended Fix:
+1. Remove visibleQuestions from the selectedQuestionId effect, or track
+   prevSelectedQuestionIdRef so it only syncs when the user explicitly clicks a
+   different question in the desktop tree.
+2. Maintain activeQuestionId (string) as primary state instead of array index.
+
+--------------------------------------------------------------------------------
+4. BASIC NAVIGATION RESULTS
+--------------------------------------------------------------------------------
+Step | Action                  | Question ID | Expected Render | Actual Render | Status
+-----+-------------------------+-------------+-----------------+---------------+--------
+1    | Open Preview            | q_1         | Q1 (Short Text) | Q1            | PASS
+2    | Click Next (no answer)  | q_1 -> q_2  | Q2 (Number)     | Q2            | PASS
+3    | Enter number 45 on Q2   | q_2         | Q2 retains 45   | Jumps to Q1   | FAIL (MOBILE-NAV-001)
+4    | Click Next Q1 -> Q2     | q_1 -> q_2  | Q2 shows 45     | Q2 shows 45   | PASS
+5    | Click Next Q2 -> Q3     | q_2 -> q_3  | Q3 (Radio)      | Q3            | PASS
+6    | Select choice on Q3     | q_3         | Q3 retains choice| Jumps to Q1  | FAIL (MOBILE-NAV-001)
+7    | Click Back from Q3      | q_3 -> q_2  | Q2              | Q2            | PASS
+8    | Click Back from Q2      | q_2 -> q_1  | Q1              | Q1            | PASS
+9    | Click Back on Q1        | q_1         | Disabled        | Disabled      | PASS
+
+--------------------------------------------------------------------------------
+5. ANSWER PERSISTENCE RESULTS (BY QUESTION TYPE)
+--------------------------------------------------------------------------------
+Question Type     | Answer Value Entered | Next -> Back Roundtrip | Status
+------------------+----------------------+------------------------+-----------------
+Short Text        | "Ramesh Kumar"       | Retained               | PASS
+Long Text         | "Multi-line remarks" | Retained               | PASS
+Number            | 125.50               | Retained               | PASS
+Radio             | "opt_yes"            | Retained               | PASS
+Checkbox          | ["opt_1", "opt_3"]   | Retained               | PASS
+Dropdown          | "opt_pune"           | Retained               | PASS
+Selected Dropdown | Truck MH-12-AB-1234  | Retained               | PASS
+Date              | "2026-09-22"         | Retained               | PASS
+DateRange         | {start, end}         | Retained               | PASS
+Time              | "14:30"              | Retained               | PASS
+Rating            | 4 Stars              | Retained               | PASS
+Emoji             | 5 (Excellent)        | Retained               | PASS
+Rank              | ["Item 2", "Item 1"] | Retained               | PASS
+Picture           | ["photo_url_1"]      | Retained               | PASS
+Audio             | "audio_42s.m4a"      | Retained               | PASS
+Video             | ["video_url_1"]      | Retained               | PASS
+Document          | "doc.pdf"            | Retained               | PASS
+QRCode            | "MATI-LAB-84920"     | Retained               | PASS
+PolygonBoundary   | 4 Vertices Object    | Canvas resets to empty | FAIL (MOBILE-STATE-001)
+Repeater_QT       | 3 Iterations         | Retained               | PASS
+
+--------------------------------------------------------------------------------
+6. REPEATER TEST RESULTS
+--------------------------------------------------------------------------------
+* Instance Isolation:
+  Plot 1 Q1.1 answers save to q_1_1_inst_0.
+  Plot 2 Q1.1 answers save to q_1_1_inst_1.
+  Plot tabs switch cleanly without cross-instance leakage. (PASS)
+* Transition Defect (MOBILE-REPEATER-001 - P1 Critical):
+  When child[0] is conditionally hidden in Plot 2, findIndex returns -1 and
+  falls through to skip Plot 2 entirely.
+
+--------------------------------------------------------------------------------
+7. USER-SELECTABLE CHANGE LIST
+--------------------------------------------------------------------------------
+[ ] MOBILE-NAV-001      — Next resets to Q1 due to desktop sync effect (P0, Small)
+[ ] MOBILE-NAV-002      — Dynamic visibility causes index pointer desync (P1, Medium)
+[ ] MOBILE-REPEATER-001 — Repeater skips iteration if child 0 is hidden (P1, Small)
+[ ] MOBILE-STATE-001    — Polygon boundary vertices reset on Back nav (P2, Small)
+[ ] MOBILE-A11Y-001     — Missing screen-reader announcement on Next (P2, Small)
+[ ] MOBILE-UI-001       — Navigation buttons below 44px touch guideline (P2, Small)
+[ ] MOBILE-RTL-001      — Preview container missing dynamic RTL dir (P3, Small)
+
+--------------------------------------------------------------------------------
+8. DEPENDENCY GROUPS
+--------------------------------------------------------------------------------
+* Group A (Critical Navigation & Pointer Stability):
+  MOBILE-NAV-001, MOBILE-NAV-002, MOBILE-REPEATER-001
+* Group B (Field State & Localization Polish):
+  MOBILE-STATE-001, MOBILE-RTL-001
+* Group C (Accessibility & Mobile Touch Ergonomics):
+  MOBILE-A11Y-001, MOBILE-UI-001
+
+--------------------------------------------------------------------------------
+9. FINAL AUDIT STATUS
+--------------------------------------------------------------------------------
+============================================================
+AUDIT COMPLETE
+NO CHANGES MADE
+============================================================
+All application code, UI, styles, tests, and configuration remain unmodified.
+Awaiting user selection of finding IDs or groups to proceed with implementation.
+================================================================================

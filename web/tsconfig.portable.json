@@ -1,0 +1,27 @@
+{
+  "//": "Port-bound code checked with matic-dash's extra compiler flags (its `npm run build` runs `tsc -b` with these). Report-only: run `npm run typecheck:portable` before handing a feature over. See docs/PORTABILITY.md.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/platform/**/*",
+    "src/lib/server-table/**/*",
+    "src/lib/utils.ts",
+    "src/components/ui/**/*",
+    "src/hooks/**/*",
+    "src/types/**/*",
+    "src/app/layouts/engagement/**/*",
+    "src/app/layouts/deployment/**/*",
+    "src/app/layouts/samples/**/*",
+    "src/components/data-inspector/**/*",
+    "src/app/layouts/season-management/**/*",
+    "src/app/layouts/survey-builder-simplified/**/*",
+    "src/app/components/filter/components/**/*",
+    "src/app/components/survey/SurveyComponents.tsx"
+  ]
+}

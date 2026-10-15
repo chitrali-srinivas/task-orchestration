@@ -1,0 +1,28 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "target": "es2022",
+        "lib": ["es2022", "dom"],
+        "strict": true,
+        "skipLibCheck": true,
+        "esModuleInterop": true,
+        "moduleResolution": "node",
+        "resolveJsonModule": true,
+        "noEmitOnError": false,
+        "types": ["node"],
+        "jsx": "preserve",
+        "baseUrl": "../..",
+        "paths": { "@/*": ["src/*"] },
+        "rootDir": "../../src",
+        "outDir": "out-live"
+    },
+    "files": [
+        "../../src/app/layouts/deployment-v2-1/data/deployment-api.ts",
+        "../../src/app/layouts/deployment-v2-1/data/live-api.ts",
+        "../../src/app/layouts/deployment-v2-1/data/live-store.ts",
+        "../../src/app/layouts/deployment-v2-1/data/dispatch-reads.ts",
+        "../../src/app/layouts/deployment-v2-1/data/api-trace.ts",
+        "../../src/app/layouts/deployment-v2-1/data/query-mapper.ts",
+        "../../src/app/layouts/deployment-v2-1/data/data-source.ts"
+    ]
+}

@@ -4,14 +4,21 @@ No seed data: everything is created in the UI.
 
 | URL | Page |
 |---|---|
-| `/web/` | **HQ Admin** — Survey Templates, Season Management |
-| `/mobile/` | **Surveyor phone** — Task's (Pending / Completed), fill and submit, register farmers |
+| `http://localhost:3100/layouts/survey-builder/v1-0` | **Survey builder** — the original app from [mati-carbon-demo](https://github.com/shashank-s73/mati-carbon-demo) (`web/`), unchanged except for a **Survey Statuses** field in *Edit Survey Details* |
+| `http://localhost:3200/web/` | **HQ Admin · Season Management** — seasons and the task flow (orchestration, built separately; not wired to the builder yet) |
+| `http://localhost:3200/mobile/` | **Surveyor phone** — Task's (Pending / Completed), fill and submit, register farmers |
 
-## HQ Admin
+## Survey builder (`web/`)
 
-**Survey Templates** — one page per survey: questions (question, type, required, options; ⚙ for key, min, max, help text) and the survey's own **statuses**. The first status is set when a task is created, the second when the surveyor submits, the rest are set by the verifier. Season Management uses these statuses to trigger the next survey.
+A copy of `mati-demo` from the GitHub repo (without `docs/`, the zips and `node_modules`). The only change: a survey has **statuses** (`SurveyModel.statuses`, default `planned, collected`), edited as chips in *⋮ → Edit Survey Details*, serialized into the core JSON and read back by the normalizer. The first status is set when a task is created, the second when the surveyor submits, the rest are set by the verifier.
 
-**Season Management** — season name, base, AZ, status, and the flow, top-down:
+```bash
+cd web && npm install && npx next dev -p 3100
+```
+
+## HQ Admin · Season Management (`src/web/`)
+
+Season name, base, AZ, status, and the flow as a tree:
 
 ```
 Start
