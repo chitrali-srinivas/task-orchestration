@@ -409,10 +409,6 @@ function AppSidebar({
                     <NavMain items={admin} label="Admin" activeItemUrl={activeItemUrl} onItemClick={onItemClick} />
                 )}
 
-                {hqVerifier && hqVerifier.length > 0 && (
-                    <NavMain items={hqVerifier} label="HQ Verifier" activeItemUrl={activeItemUrl} onItemClick={onItemClick} />
-                )}
-
                 {hqAdmin && hqAdmin.length > 0 && (
                     <NavMain items={hqAdmin} label="HQ Admin" activeItemUrl={activeItemUrl} onItemClick={onItemClick} />
                 )}

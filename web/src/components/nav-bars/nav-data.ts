@@ -249,6 +249,12 @@ export const data = {
             roles: ["HQ Admin"] as UserRole[],
         },
         {
+            title: "Survey Builder",
+            url: "/layouts/survey-builder/v1-0",
+            icon: ClipboardList,
+            roles: ["HQ Admin"] as UserRole[],
+        },
+        {
             title: "Farmers",
             url: "#hq-a-farmers",
             icon: Users,
