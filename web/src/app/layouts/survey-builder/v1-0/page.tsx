@@ -75,7 +75,7 @@ export default function SurveyBuilderPage() {
         async function fetchSurveys() {
             setIsLoadingSurveys(true);
             try {
-                const list = await SurveyService.getSurveysByAZ(selectedAzId);
+                const list = await SurveyService.getAllSurveys();
                 if (isMounted) {
                     setSurveys(list);
                     if (list.length > 0) {

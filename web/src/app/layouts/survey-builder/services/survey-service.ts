@@ -57,6 +57,11 @@ export const SurveyService = {
     /**
      * Retrieves all surveys filtered by AZ
      */
+    async getAllSurveys(): Promise<SurveyModel[]> {
+        await new Promise((r) => setTimeout(r, 80));
+        return [...inMemorySurveys];
+    },
+
     async getSurveysByAZ(azId: string): Promise<SurveyModel[]> {
         await new Promise((r) => setTimeout(r, 80));
         return inMemorySurveys.filter((s) => s.azId === azId);
