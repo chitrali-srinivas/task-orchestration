@@ -8,13 +8,12 @@ import {
 import {
     AZOption,
     MOCK_AZS,
-    RAW_MOCK_SURVEYS,
 } from "./mock-surveys";
-import { normalizeBackendSurvey } from "../lib/survey-normalizer";
 import { computeSurveyDiff, SurveyVersionDiff } from "../lib/version-diff-engine";
 
 // In-memory state storage simulating persistent backend database
-let inMemorySurveys: SurveyModel[] = RAW_MOCK_SURVEYS.map((raw) => normalizeBackendSurvey(raw));
+// No seeded surveys: everything is created in the builder.
+let inMemorySurveys: SurveyModel[] = [];
 
 // Update AZ survey counts dynamically
 MOCK_AZS.forEach((az) => {
