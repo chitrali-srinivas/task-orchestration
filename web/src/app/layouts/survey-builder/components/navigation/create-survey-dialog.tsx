@@ -23,7 +23,6 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { AZOption } from "../../services/mock-surveys";
-import { CATEGORY_REGISTRY, getCategoryPath } from "../../lib/category-registry";
 
 interface CreateSurveyDialogProps {
     azs: AZOption[];
@@ -51,7 +50,6 @@ export function CreateSurveyDialog({
     const [description, setDescription] = useState("");
     const [azId, setAzId] = useState(currentAzId || "");
     const [defaultLocale, setDefaultLocale] = useState("en");
-    const [category, setCategory] = useState("");
     const [error, setError] = useState<string | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -61,10 +59,6 @@ export function CreateSurveyDialog({
             return;
         }
 
-        if (!category || !category.trim()) {
-            setError("Survey category is required. Please select a category to continue.");
-            return;
-        }
 
         try {
             setIsSubmitting(true);
@@ -73,11 +67,9 @@ export function CreateSurveyDialog({
                 description: description.trim() || undefined,
                 azId,
                 defaultLocale,
-                category: category.trim(),
             });
             setName("");
             setDescription("");
-            setCategory("");
             setError(null);
             setOpen(false);
         } catch (err: any) {
@@ -172,43 +164,6 @@ export function CreateSurveyDialog({
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label htmlFor="survey-cat" className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                                Category <span className="text-rose-500">*</span>
-                            </Label>
-                            <Select value={category || undefined} onValueChange={setCategory}>
-                                <SelectTrigger id="survey-cat" className="bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 h-9 text-xs">
-                                    <SelectValue placeholder="Select Category" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100">
-                                    {CATEGORY_REGISTRY.map((cat) => (
-                                        <SelectItem key={cat.id} value={cat.name} className="text-xs">
-                                            {cat.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-
-                            {/* App Location Info Panel */}
-                            <div className="p-2.5 rounded-md bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 space-y-1 mt-1">
-                                <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">
-                                    App Location
-                                </span>
-                                <div className="flex items-center gap-1.5 font-mono text-[11px] font-semibold text-zinc-800 dark:text-zinc-200">
-                                    {getCategoryPath(category) ? (
-                                        getCategoryPath(category)?.map((crumb, idx, arr) => (
-                                            <React.Fragment key={crumb}>
-                                                <span>{crumb}</span>
-                                                {idx < arr.length - 1 && <span className="text-zinc-400">→</span>}
-                                            </React.Fragment>
-                                        ))
-                                    ) : (
-                                        <span className="text-zinc-400 font-normal italic">Select a category to view its assigned application path.</span>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="space-y-1.5">
                             <Label htmlFor="survey-desc" className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                                 Description (Optional)
                             </Label>
@@ -235,7 +190,7 @@ export function CreateSurveyDialog({
                         <Button
                             type="submit"
                             size="sm"
-                            disabled={isSubmitting || !name.trim() || !category.trim()}
+                            disabled={isSubmitting || !name.trim()}
                             className="h-8 px-3.5 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 rounded-md shadow-xs disabled:opacity-50"
                         >
                             {isSubmitting ? "Creating..." : "Create Survey"}
