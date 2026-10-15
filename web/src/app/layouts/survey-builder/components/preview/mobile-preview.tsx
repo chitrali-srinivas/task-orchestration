@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SurveyModel } from "../../types/survey-schema";
 import { PreviewControls } from "./preview-controls";
-import { PreviewRuntime } from "./preview-runtime";
+import { PreviewAllQuestions } from "./preview-runtime";
 
 interface MobilePreviewProps {
     survey: SurveyModel;
@@ -140,7 +140,7 @@ export function MobilePreview({
 
             {/* Smartphone Simulated Hardware Shell */}
             <div className="flex-1 flex items-center justify-center p-1 min-h-0">
-                <div className="w-full max-w-[340px] h-full max-h-[580px] bg-white dark:bg-zinc-900 border-[6px] border-zinc-900 dark:border-zinc-700 rounded-[38px] shadow-2xl overflow-hidden flex flex-col relative ring-1 ring-zinc-200 dark:ring-zinc-800">
+                <div className="w-full max-w-[300px] h-full max-h-[460px] bg-white dark:bg-zinc-900 border-[6px] border-zinc-900 dark:border-zinc-700 rounded-[38px] shadow-2xl overflow-hidden flex flex-col relative ring-1 ring-zinc-200 dark:ring-zinc-800">
                     {/* Top Notch & Status Bar */}
                     <div className="h-7 bg-zinc-900 text-zinc-400 px-5 flex items-center justify-between text-[11px] font-medium shrink-0 select-none z-30">
                         <span className="font-mono text-[10px] text-zinc-300">09:41</span>
@@ -170,13 +170,12 @@ export function MobilePreview({
 
                     {/* Mobile Screen Runtime */}
                     <div className="flex-1 min-h-0 overflow-hidden bg-white dark:bg-zinc-950">
-                        <PreviewRuntime
+                        <PreviewAllQuestions
                             survey={survey}
                             selectedQuestionId={selectedQuestionId}
                             locale={locale}
                             runtimeAnswers={runtimeAnswers}
                             onChangeAnswer={onChangeAnswer}
-                            onResetAnswers={onResetAnswers}
                             onSelectQuestion={onSelectQuestion}
                         />
                     </div>

@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import {
     DropdownMenu,
@@ -48,7 +49,6 @@ import { SurveyValidationResult } from "../../lib/survey-validator";
 import { serializeSurveyToBackend, serializeCoreSurveyJSON } from "../../lib/survey-serializer";
 import { TranslationService } from "../../services/translation-service";
 import { getCategoryById } from "../../lib/category-registry";
-import { PublishDialog } from "./publish-dialog";
 import { ValidationSheet } from "./validation-sheet";
 import { LanguageManagerDialog } from "./language-manager-dialog";
 
@@ -103,7 +103,8 @@ export function SurveyHeader({
     languageManagerOpen,
     setLanguageManagerOpen,
 }: SurveyHeaderProps) {
-    const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+    const [publishDialogOpen, setPublishDialogOpen] = useState(false);   // blocking-errors popup
+    const [isPublishing, setIsPublishing] = useState(false);
     const [validationSheetOpen, setValidationSheetOpen] = useState(false);
 
     const isPublished = survey.status === "Published";
@@ -405,11 +406,23 @@ export function SurveyHeader({
                     {!isPublished && (
                         <Button
                             size="sm"
-                            onClick={() => setPublishDialogOpen(true)}
+                            disabled={isPublishing}
+                            onClick={async () => {
+                                if (validation.errorCount > 0) {
+                                    setPublishDialogOpen(true);   // shows the blocking errors
+                                    return;
+                                }
+                                setIsPublishing(true);
+                                try {
+                                    await onPublish("");
+                                } finally {
+                                    setIsPublishing(false);
+                                }
+                            }}
                             className="h-8 px-3.5 text-xs font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-50 dark:hover:bg-zinc-200 dark:text-zinc-900 gap-1.5 shadow-2xs"
                         >
                             <Send className="h-3.5 w-3.5" />
-                            <span>Publish</span>
+                            <span>{isPublishing ? "Publishing..." : "Publish"}</span>
                         </Button>
                     )}
 
@@ -493,14 +506,34 @@ export function SurveyHeader({
                 onSelectQuestion={onSelectQuestion}
             />
 
-            {/* Publish Confirmation Dialog */}
-            <PublishDialog
-                open={publishDialogOpen}
-                onOpenChange={setPublishDialogOpen}
-                survey={survey}
-                validation={validation}
-                onConfirmPublish={onPublish}
-            />
+            {/* Publish blocked: list the errors to fix */}
+            <Dialog open={publishDialogOpen} onOpenChange={setPublishDialogOpen}>
+                <DialogContent className="sm:max-w-[460px] bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 p-0 overflow-hidden">
+                    <DialogHeader className="p-5 border-b border-zinc-200 dark:border-zinc-800 bg-rose-50/60 dark:bg-rose-950/20">
+                        <DialogTitle className="flex items-center gap-2 text-base font-bold text-rose-700 dark:text-rose-300">
+                            <AlertCircle className="h-4 w-4" /> Can&apos;t publish yet
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-zinc-500 dark:text-zinc-400">
+                            Fix {validation.errorCount === 1 ? "this error" : `these ${validation.errorCount} errors`} and press Publish again.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <ul className="max-h-[50vh] overflow-y-auto p-5 space-y-2 text-xs">
+                        {validation.errors.map((e) => (
+                            <li key={e.id} className="rounded-md border border-zinc-200 dark:border-zinc-800 p-3">
+                                <div className="font-semibold text-zinc-900 dark:text-zinc-100">
+                                    {e.questionDisplayIndex ? `Q${e.questionDisplayIndex} · ` : ""}{e.title}
+                                </div>
+                                <div className="text-zinc-500 dark:text-zinc-400 mt-0.5">{e.message}</div>
+                            </li>
+                        ))}
+                    </ul>
+                    <DialogFooter className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
+                        <Button type="button" size="sm" onClick={() => setPublishDialogOpen(false)} className="h-8 px-3.5 text-xs">
+                            Back to edit
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Language Manager Dialog */}
             <LanguageManagerDialog
