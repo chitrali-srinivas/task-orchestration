@@ -28,7 +28,8 @@ import {
     ArrowLeftRight,
     ShieldPlus,
     CalendarCheck,
-    LayoutPanelLeft
+    LayoutPanelLeft,
+    Workflow
 } from "lucide-react"
 
 export type UserRole = "Verifier" | "Admin" | "HQ Verifier" | "HQ Admin";
@@ -92,7 +93,6 @@ export const data = {
                 { title: "Qualification", url: "#qualification" },
                 { title: "Deployment", url: "/layouts/deployment" },
                 { title: "Engagement", url: "/layouts/engagement" },
-                { title: "Season Management", url: "/layouts/season-management" },
                 { title: "Science Analysis", url: "/layouts/science-analysis" },
                 { title: "Conversation", url: "#conversation" },
             ],
@@ -165,7 +165,6 @@ export const data = {
             icon: CalendarCheck,
             roles: ["Admin"] as UserRole[],
             items: [
-                { title: "Season Management", url: "/layouts/season-management" },
                 { title: "Create Plan", url: "#planning-create" },
                 { title: "Saved Plans", url: "#planning-saved" },
                 { title: "Completed plans", url: "#planning-completed" }
@@ -252,6 +251,12 @@ export const data = {
             title: "Survey Builder",
             url: "/layouts/survey-builder/v1-0",
             icon: ClipboardList,
+            roles: ["HQ Admin"] as UserRole[],
+        },
+        {
+            title: "Survey Workflow",
+            url: "/layouts/season-management",
+            icon: Workflow,
             roles: ["HQ Admin"] as UserRole[],
         },
         {
