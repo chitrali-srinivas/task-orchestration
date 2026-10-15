@@ -290,15 +290,7 @@ export function ValidationTab({
                 </div>
             )}
 
-            {/* 4. PATTERN & REGEX VALIDATION (PRESETS + CUSTOM REGEX + TESTER + HELP) */}
-            {(isText || isNumeric || isQR) && (
-                <PatternValidationSection
-                    question={question}
-                    val={val}
-                    isPublished={isPublished}
-                    onUpdate={handleUpdate}
-                />
-            )}
+            {/* Pattern (regex) validation is set from the Validation toggle on the Basic tab. */}
 
             {/* 5. DATE & CALENDAR SCHEDULING CONSTRAINTS */}
             {isDate && (
