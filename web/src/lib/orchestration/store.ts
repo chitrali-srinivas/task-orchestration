@@ -44,7 +44,11 @@ const nowIso = () => new Date().toISOString();
 const nextNo = (tasks: Task[]) => tasks.reduce((m, t) => Math.max(m, t.taskNo), 0) + 1;
 const newIds = (prefix: string) => (i: number) => `${prefix}_${Date.now()}_${i}`;
 
-export const activeWorkflows = () => loadWorkflows().filter((w) => w.status === "active");
+/** Workflows the phone can run: active ones first, then drafts (the starting survey is always open). */
+export const phoneWorkflows = () =>
+    loadWorkflows()
+        .filter((w) => w.status !== "completed")
+        .sort((a, b) => (a.status === "active" ? 0 : 1) - (b.status === "active" ? 0 : 1));
 
 /** Apply expiry for `today` and persist. Called by pages on load / when the date changes. */
 export function refreshTasks(today: string): Task[] {
