@@ -12,7 +12,7 @@ import { SurveyModel } from "@/app/layouts/survey-builder/types/survey-schema";
 import { PreviewAllQuestions } from "@/app/layouts/survey-builder/components/preview/preview-runtime";
 import { Workflow } from "@/app/layouts/survey-workflow/workflow-store";
 import { Farmer, STATUS, Task, isPendingOnApp } from "@/lib/orchestration/engine";
-import { activeWorkflows, loadFarmers, loadToday, refreshTasks, registerFarmer, saveToday, submitTask } from "@/lib/orchestration/store";
+import { phoneWorkflows, loadFarmers, loadToday, refreshTasks, registerFarmer, saveToday, submitTask } from "@/lib/orchestration/store";
 
 /**
  * Surveyor phone (simulation). Registering a farmer fills the workflow's first survey; the
@@ -30,7 +30,7 @@ export default function PhonePage() {
     useEffect(() => {
         const t = loadToday();
         setToday(t);
-        const wfs = activeWorkflows();
+        const wfs = phoneWorkflows();
         setWorkflows(wfs);
         setWorkflowId(wfs[0]?.id || "");
         setTasks(refreshTasks(t));
@@ -61,14 +61,13 @@ export default function PhonePage() {
                         <Label className="text-xs">Workflow</Label>
                         {workflows.length === 0 ? (
                             <p className="text-[11px] text-rose-600">
-                                No active workflow. Set one to <span className="font-semibold">active</span> in{" "}
-                                <a href="/layouts/survey-workflow" className="underline">Survey Workflow</a>.
+                                No workflow yet. Create one in <a href="/layouts/survey-workflow" className="underline">Survey Workflow</a>.
                             </p>
                         ) : (
                             <Select value={workflowId} onValueChange={setWorkflowId}>
                                 <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                    {workflows.map((w) => <SelectItem key={w.id} value={w.id} className="text-xs">{w.name}</SelectItem>)}
+                                    {workflows.map((w) => <SelectItem key={w.id} value={w.id} className="text-xs">{w.name} <span className="text-zinc-400">· {w.status}</span></SelectItem>)}
                                 </SelectContent>
                             </Select>
                         )}
@@ -144,6 +143,21 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, onTasks, onFarmers
         </div>
     );
 
+    // The workflow's starting survey is always open: it is how a farmer enters the workflow.
+    const rootStep = workflow?.steps.find((st) => st.parentId === null);
+    const rootSurvey = rootStep ? surveyById.get(rootStep.surveyId) : undefined;
+    const startCard = rootSurvey && (
+        <button
+            type="button"
+            onClick={() => setScreen({ name: "register" })}
+            className="w-full rounded-lg border border-dashed border-zinc-400 p-3 text-left hover:border-zinc-900 dark:hover:border-zinc-100"
+        >
+            <div className="font-mono text-[10px] text-zinc-500">Start · always open</div>
+            <div className="mt-1 text-xs font-semibold">Survey: {rootSurvey.name}</div>
+            <div className="text-[11px] text-zinc-600 dark:text-zinc-300">Register a new farmer</div>
+        </button>
+    );
+
     const taskCard = (t: Task) => {
         const f = farmerById.get(t.farmerId);
         const s = surveyById.get(t.surveyId);
@@ -191,7 +205,7 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, onTasks, onFarmers
             <RegisterFarmer
                 survey={s}
                 villages={villages}
-                disabledReason={!workflow ? "No active workflow." : !rootStep ? "The workflow has no first survey after Start." : !s ? "The first survey of the workflow no longer exists." : ""}
+                disabledReason={!workflow ? "No workflow." : !rootStep ? "The workflow has no first survey after Start." : !s ? "The first survey of the workflow no longer exists." : ""}
                 onBack={() => setScreen({ name: "farmers" })}
                 onSubmit={(name, vil, answers) => {
                     const res = registerFarmer({ workflow: workflow!, rootStepId: rootStep!.id, name, village: vil, response: answers, today });
@@ -246,6 +260,7 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, onTasks, onFarmers
                     ))}
                 </div>
                 <div className="mt-3 space-y-2">
+                    {tab === "pending" && startCard}
                     {(tab === "pending" ? pending : completed).length === 0 ? (
                         <p className="py-8 text-center text-xs text-zinc-400">{tab === "pending" ? "No pending tasks." : "Nothing completed yet."}</p>
                     ) : (
