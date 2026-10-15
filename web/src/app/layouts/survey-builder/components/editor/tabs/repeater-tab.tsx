@@ -8,10 +8,8 @@ import {
     ArrowUp,
     ArrowDown,
     ArrowRight,
-    Hash,
     HelpCircle,
     CheckCircle2,
-    Info,
     MoveRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -463,196 +461,13 @@ export function RepeaterTab({
             {/* Repeater Configuration Details */}
             {isRepeater && (
                 <div className="space-y-6 animate-in fade-in duration-200">
-                    {/* SECTION 1: REPEATER SETTINGS */}
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-2 pb-1 border-b border-zinc-200 dark:border-zinc-800">
-                            <Layers className="h-4 w-4 text-zinc-600 dark:text-zinc-400" />
-                            <h3 className="font-bold text-xs uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
-                                1. Repeater Settings & Metadata
-                            </h3>
-                        </div>
-
-                        {/* Repeat Count Source Card */}
-                        <div className="p-5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xs space-y-4">
-                            <div className="space-y-1">
-                                <Label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                                    Repeat Count Source
-                                </Label>
-                                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-normal">
-                                    Specify where the runtime gets the number of times to repeat this block.
-                                </p>
-                            </div>
-
-                            <RadioGroup
-                                value={countMode}
-                                disabled={isPublished}
-                                onValueChange={(val) => {
-                                    if (val === "self") {
-                                        onChangeQuestion({
-                                            ...question,
-                                            repeater: {
-                                                ...repeater,
-                                                countSourceType: "question",
-                                                countQuestionId: question.id,
-                                                fixedCount: undefined,
-                                            },
-                                        });
-                                    } else if (val === "other_question") {
-                                        onChangeQuestion({
-                                            ...question,
-                                            repeater: {
-                                                ...repeater,
-                                                countSourceType: "question",
-                                                countQuestionId: numericQuestions[0]?.id || "",
-                                                fixedCount: undefined,
-                                            },
-                                        });
-                                    } else if (val === "fixed") {
-                                        onChangeQuestion({
-                                            ...question,
-                                            repeater: {
-                                                ...repeater,
-                                                countSourceType: "fixed",
-                                                fixedCount: 2,
-                                                countQuestionId: undefined,
-                                            },
-                                        });
-                                    }
-                                }}
-                                className="space-y-2.5 pt-1"
-                            >
-                                {/* Option 1: Self numeric answer */}
-                                <label className={cn(
-                                    "flex items-start gap-3 p-3.5 rounded-lg border text-xs cursor-pointer transition-colors",
-                                    countMode === "self"
-                                        ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-800/60"
-                                        : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                                )}>
-                                    <RadioGroupItem value="self" className="mt-0.5" />
-                                    <div className="space-y-0.5">
-                                        <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-                                            Answer to this question (Self)
-                                        </span>
-                                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-normal">
-                                            The surveyor answers this question (e.g. &quot;How many plots of land do you have?&quot;) and the number entered determines the count.
-                                        </p>
-                                    </div>
-                                </label>
-
-                                {/* Option 2: Another question */}
-                                <label className={cn(
-                                    "flex items-start gap-3 p-3.5 rounded-lg border text-xs cursor-pointer transition-colors",
-                                    countMode === "other_question"
-                                        ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-800/60"
-                                        : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                                )}>
-                                    <RadioGroupItem value="other_question" className="mt-0.5" />
-                                    <div className="space-y-1.5 flex-1">
-                                        <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-                                            Answer from another question
-                                        </span>
-                                        {countMode === "other_question" && (
-                                            <select
-                                                value={repeater.countQuestionId || ""}
-                                                disabled={isPublished}
-                                                onChange={(e) =>
-                                                    onChangeQuestion({
-                                                        ...question,
-                                                        repeater: {
-                                                            ...repeater,
-                                                            countSourceType: "question",
-                                                            countQuestionId: e.target.value,
-                                                        },
-                                                    })
-                                                }
-                                                className="w-full h-9 text-xs bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-lg px-2.5 mt-1"
-                                            >
-                                                {numericQuestions.map((nq) => (
-                                                    <option key={nq.id} value={nq.id}>
-                                                        Q{nq.number}: {nq.titles.en} ({nq.columnName})
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        )}
-                                    </div>
-                                </label>
-
-                                {/* Option 3: Fixed count */}
-                                <label className={cn(
-                                    "flex items-start gap-3 p-3.5 rounded-lg border text-xs cursor-pointer transition-colors",
-                                    countMode === "fixed"
-                                        ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50 dark:bg-zinc-800/60"
-                                        : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-                                )}>
-                                    <RadioGroupItem value="fixed" className="mt-0.5" />
-                                    <div className="space-y-1.5 flex-1">
-                                        <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-                                            Fixed count (Always repeat N times)
-                                        </span>
-                                        {countMode === "fixed" && (
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <Input
-                                                    type="number"
-                                                    min={1}
-                                                    max={50}
-                                                    value={repeater.fixedCount || 2}
-                                                    disabled={isPublished}
-                                                    onChange={(e) =>
-                                                        onChangeQuestion({
-                                                            ...question,
-                                                            repeater: {
-                                                                ...repeater,
-                                                                countSourceType: "fixed",
-                                                                fixedCount: Math.max(1, parseInt(e.target.value, 10) || 1),
-                                                            },
-                                                        })
-                                                    }
-                                                    className="w-24 h-9 text-xs rounded-lg bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800"
-                                                />
-                                                <span className="text-[11px] text-zinc-500">iterations</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </label>
-                            </RadioGroup>
-                        </div>
-
-                        {/* Instance Tab Label Template */}
-                        <div className="p-5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xs space-y-3">
-                            <Label className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                                Instance Tab Label Template
-                            </Label>
-                            <Input
-                                placeholder="e.g. Plot #{index} or Sub-Sample #{index}"
-                                value={repeater.itemLabelTemplate || "Plot #{index}"}
-                                disabled={isPublished}
-                                onChange={(e) =>
-                                    onChangeQuestion({
-                                        ...question,
-                                        repeater: {
-                                            ...repeater,
-                                            itemLabelTemplate: e.target.value,
-                                        },
-                                    })
-                                }
-                                className="h-9 text-xs rounded-lg bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono"
-                            />
-                            <div className="flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 pt-0.5">
-                                <span>Use <code className="font-mono text-zinc-700 dark:text-zinc-300">{"#{index}"}</code> for iteration number (1, 2, 3...).</span>
-                                <span className="text-zinc-600 dark:text-zinc-400 font-medium">
-                                    Preview: {(repeater.itemLabelTemplate || "Plot #{index}").replace("#{index}", "1")}, {(repeater.itemLabelTemplate || "Plot #{index}").replace("#{index}", "2")}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
                     {/* SECTION 2: QUESTIONS IN THIS REPEATER */}
                     <div className="space-y-4 pt-2">
                         <div className="flex items-center justify-between pb-1 border-b border-zinc-200 dark:border-zinc-800 flex-wrap gap-2">
                             <div className="flex items-center gap-2">
                                 <Layers className="h-4 w-4 text-zinc-600 dark:text-zinc-400" />
                                 <h3 className="font-bold text-xs uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
-                                    2. Questions in this Repeater ({childIds.length} questions)
+                                    Questions in this Repeater ({childIds.length})
                                 </h3>
                             </div>
 
@@ -824,13 +639,6 @@ export function RepeaterTab({
                             </div>
                         )}
 
-                        {/* Summary Infobox */}
-                        <div className="p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 flex items-start gap-2 text-[11px] text-zinc-600 dark:text-zinc-400">
-                            <Info className="h-4 w-4 text-zinc-500 shrink-0 mt-0.5" />
-                            <span>
-                                In the mobile runtime, when the respondent answers <strong className="text-zinc-900 dark:text-zinc-100">Q{question.number}</strong> with <strong className="text-zinc-900 dark:text-zinc-100">N</strong>, questions {childIds.length > 0 ? `Q${question.displayIndex || question.number}.1 through Q${question.displayIndex || question.number}.${childIds.length}` : "(children)"} will repeat N times with independent answers recorded per instance.
-                            </span>
-                        </div>
                     </div>
                 </div>
             )}
