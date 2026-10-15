@@ -1,0 +1,10 @@
+Vercel CLI 48.10.4
+Retrieving project…
+Deploying shashanks-projects-79489547/mati-demo
+Uploading [--------------------] (0.0B/89B)
+Uploading [====================] (89.0B/89B)
+Inspect: https://vercel.com/shashanks-projects-79489547/mati-demo/Bq8WQn5k8vQXYPpuLqAfwFwuVMWg [2s]
+Production: https://mati-demo-855his6un-shashanks-projects-79489547.vercel.app [2s]
+https://mati-demo-855his6un-shashanks-projects-79489547.vercel.appQueued
+Building
+Error: Vulnerable version of Next.js detected, please update immediately.

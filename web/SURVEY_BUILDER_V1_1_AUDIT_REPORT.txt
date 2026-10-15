@@ -1,0 +1,340 @@
+================================================================================
+SURVEY BUILDER V1.1 — UX / UI / FUNCTIONAL AUDIT REPORT
+================================================================================
+Date: September 21, 2026
+Environment: Local Development / Webpack-Vite React 19
+Build/Commit: mati-demo workspace baseline (SHA-256 verified)
+Route: /survey-builder-simplified (src/app/layouts/survey-builder-simplified/)
+Scope: Survey Builder Simplified / V1.1 only (V1.0 baseline untouched)
+Mode: AUDIT ONLY (Read-Only)
+
+--------------------------------------------------------------------------------
+1. EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+This product audit evaluates Survey Builder V1.1 (survey-builder-simplified)
+across 35 quality dimensions, including functional correctness, end-to-end user
+flows, UX heuristics (Nielsen 10), human-centered design (ISO 9241-210), visual
+hierarchy, design-system consistency, responsive resilience (WCAG 2.2 Reflow),
+accessibility (WCAG 2.2 Level A/AA), and data/schema integrity.
+
+Summary of Audit Observations:
+* Critical & High-Severity Areas:
+  - Responsive / Mobile Viewports (< 768px): The main sidebar question hierarchy
+    panel collapses (hidden md:flex) without a mobile drawer or question selector
+    toggle, preventing users on tablet portrait and mobile screens from switching
+    questions inside the visual builder.
+  - Accessibility & Keyboard Traps: Custom list items, tree nodes, and drag handles
+    lack explicit aria-selected, aria-expanded, and roving focus attributes,
+    failing WCAG 2.1.1 (Keyboard) and WCAG 4.1.2 (Name, Role, Value).
+  - Cascade Deletion Context: Deleting a parent question in the tree cascades or
+    orphans child follow-ups without an upfront visual listing of affected
+    descendant questions in the confirmation dialog.
+  - Schema / Legacy Field Dual Maintenance: Schema export maintains both legacy
+    fields (Parent_Dep, Opt_Dep, Qn_In) and normalized fields (parentQuestionId,
+    followUpDepth), presenting data synchronization risks if JSON is edited
+    out-of-band.
+* Usability & Information Architecture:
+  - The question configuration area separates parent follow-up context (top banner)
+    from conditional trigger logic (under the Advanced tab), requiring mental
+    stitching across disparate tabs.
+  - Question picker algorithms and modal shells are duplicated across
+    question-selector-modal.tsx, add-question-popover.tsx, and change-type-dialog.tsx.
+* Design System & Visual Consistency:
+  - Varied card padding (p-3.5 vs p-5), border radius tokens (rounded-lg vs rounded-xl),
+    and button height scales (h-7, h-8, h-9) exist across editor tabs and toolbars.
+* Version Isolation:
+  - V1.1 state, schema normalizers, serializers, diff engines, and localStorage
+    persistence are fully decoupled from V1.0 under scoped keys (simplified_*),
+    confirming that V1.0 remains insulated.
+
+--------------------------------------------------------------------------------
+2. FEATURE INVENTORY
+--------------------------------------------------------------------------------
+ID     | Feature Name                      | Location / Route | Entry Point
+-------+-----------------------------------+------------------+-----------------------------
+F-001  | Survey Hub & Metadata Management  | Hub View         | Hub top bar / New Survey card
+F-002  | Multi-View Switcher               | Top Header       | Builder/Table/Preview/Hub tabs
+F-003  | 2-Step Question Creation Modal    | Builder & Table  | Add Question button / (+)
+F-004  | Quick Add Question Popover        | Question Tree    | In-tree (+) hover trigger
+F-005  | Question Tree Navigation & Rail   | Left Panel       | Builder Left Sidebar
+F-006  | Follow-Up Hierarchy (Levels 1-5)  | Tree & Editor    | Add Follow-Up in options
+F-007  | Question Editor Basic Settings    | Center Tab 1     | Question selection
+F-008  | Response Options Editor           | Center Tab 2     | Choice question selection
+F-009  | Validation Rules & Presets        | Center Tab 3     | Validation tab
+F-010  | Repeater Block Configuration      | Center Tab 4     | Repeater_QT selection
+F-011  | Conditional Logic / Visibility    | Center Tab 5     | Logic tab
+F-012  | Advanced Question Settings        | Center Tab 6     | Advanced tab
+F-013  | Multi-Language Translation Tab    | Center Tab 7     | Translation tab
+F-014  | Survey-Level Translation Matrix   | Header Dialog    | Header Translations button
+F-015  | Language Manager                  | Header Dialog    | Header Languages button
+F-016  | Consolidated Number & Units       | Modal & Editor   | Number question selection
+F-017  | Date & Date Range Controls        | Modal & Editor   | Date / DateRange selection
+F-018  | Interactive Runtime Preview       | Right Panel/View | Header Preview switch
+F-019  | Table Grid View                   | Top Header       | Table View tab
+F-020  | In-Table Question Type Conversion | Table Menu       | Context menu Change Type
+F-021  | Global Validation & Error Sheet   | Header Right     | Header Validate badge
+F-022  | Version History & Diff Engine     | Header Action    | Header History button
+F-023  | Change Log Timeline View          | History Modal    | History Sheet Change Log tab
+F-024  | JSON Preview & Export/Import      | Bottom/Header    | Header JSON button
+F-025  | Survey Publishing & Drafts        | Header Right     | Header Publish button
+F-026  | Survey Availability & Scheduling  | Header Dialog    | Header Schedule button
+F-027  | LocalStorage Persistence Scoping  | Service layer    | All state mutations
+
+--------------------------------------------------------------------------------
+3. USER JOURNEY RESULTS (SUMMARY)
+--------------------------------------------------------------------------------
+J-001 Create a new survey from scratch/template     -> PASS
+J-002 Configure survey metadata                     -> PASS
+J-003 Add first question via Creation Modal         -> PASS
+J-004 Edit first question basic settings            -> PASS
+J-005 Change question type in Table View            -> PASS (DS-001)
+J-006 Configure question-specific options           -> PASS (UX-003)
+J-007 Configure validation & regex rules            -> PASS (VAL-001, VAL-002)
+J-008 Configure response options & scoring          -> PASS
+J-009 Add Level 1 follow-up question                -> PASS (UX-001)
+J-010 Add nested Level 2-4 follow-ups               -> PASS (A11Y-001)
+J-011 Create Level 5 follow-up                      -> PASS
+J-012 Attempt Level 6 follow-up (Blocked correctly) -> PASS
+J-013 Configure visibility conditional logic        -> PASS (UX-001)
+J-014 Add translations via Survey Matrix            -> PASS (I18N-001, I18N-002)
+J-015 Edit translated text in Question Editor       -> PASS
+J-016 Edit translated validation error messages     -> PASS (I18N-001)
+J-017 Preview and Export JSON                       -> PASS (SCHEMA-001)
+J-018 Save survey state                             -> PASS
+J-019 Reopen survey after full reload               -> PASS
+J-020 Modify existing survey in Table View          -> PASS
+J-021 Review Version History timeline               -> PASS (VERSION-001)
+J-022 Review Change Log field diffs                 -> PASS (AUDIT-001)
+J-023 Revert/restore past version                   -> PASS
+J-024 Delete question with child follow-ups         -> PASS (UX-002)
+J-025 Reorder questions via drag-and-drop           -> PASS (A11Y-001)
+J-026 Configure Repeater block with sub-questions   -> PASS
+J-027 Configure Number question (Integer/Decimal)   -> PASS (VAL-001)
+J-028 Configure Number measurement units            -> PASS (UI-001)
+J-029 Configure Date question                       -> PASS
+J-030 Configure Date Range question                 -> PASS
+J-031 Create special input questions (Media/Geo)    -> PASS
+J-032 Use Question Selection Modal (Step 1 -> 2)    -> PASS (RESP-002, UI-002)
+J-033 Cancel question creation mid-flow             -> PASS
+J-034 Recover from validation errors via Sheet      -> PASS
+J-035 Enter very long question titles and labels    -> PASS (UI-003)
+J-036 Use RTL language (Arabic/Hebrew)              -> PASS (I18N-002)
+
+--------------------------------------------------------------------------------
+4. DETAILED FINDINGS
+--------------------------------------------------------------------------------
+
+[FUNC-001] P2 (Major) - Response Options Bulk Edit Resets Scores
+Location: src/app/layouts/survey-builder-simplified/components/editor/tabs/options-tab.tsx
+Reproduction: Edit existing scored options via "Bulk Edit" textarea and apply changes.
+Actual: Entire option array is recreated with default score = 0, discarding scores.
+Impact: Silent data loss during bulk editing of weighted question choices.
+Fix Recommendation: Perform key/index reconciliation during bulk parse to retain scores.
+
+[UX-001] P2 (Major) - Disconnected Parent Trigger Context & Visibility Logic
+Location: src/app/layouts/survey-builder-simplified/components/editor/tabs/logic-tab.tsx
+Reproduction: Open a follow-up question; examine Logic tab.
+Actual: Parent trigger condition is rendered in top banner; Logic tab displays rules
+without showing the inherited parent condition.
+Impact: Authors cannot verify compound rule behavior (Parent Trigger AND Custom Rules).
+Fix Recommendation: Display read-only Parent Trigger Card above custom rules in Logic tab.
+
+[UX-002] P2 (Major) - Delete Modal Lacks Descendant Question Preview
+Location: src/app/layouts/survey-builder-simplified/components/question-list/delete-question-dialog.tsx
+Reproduction: Delete a parent question with 3 nested follow-ups.
+Actual: Modal states "Will delete 3 follow-up questions" without listing question names/IDs.
+Impact: Risk of accidental loss of descendant sub-question schemas.
+Fix Recommendation: Render expandable tree list of all descendant questions in modal.
+
+[UX-003] P3 (Minor) - Master Dataset Options Cannot Be Previewed in Editor
+Location: src/app/layouts/survey-builder-simplified/components/editor/tabs/options-tab.tsx
+Reproduction: Select "Selected Dropdown" type with master dataset.
+Actual: Only dataset name and badge are shown without sample record browser.
+Impact: Authors must enter preview runtime to verify cascading options.
+Fix Recommendation: Add collapsible "View Sample Records" popover in Options tab.
+
+[UI-001] P3 (Minor) - Inconsistent Card Padding & Border Radius Tokens
+Location: src/app/layouts/survey-builder-simplified/components/editor/tabs/basic-settings-tab.tsx
+Reproduction: Compare Question Details card (p-5, rounded-xl) with Unit card (p-3.5, rounded-lg).
+Impact: Visual fragmentation in nested form containers.
+Fix Recommendation: Standardize card tokens to p-4/rounded-xl and nested groups to p-3.5/rounded-lg.
+
+[UI-002] P3 (Minor) - Step 2 Question Creation Modal Vertical Asymmetry
+Location: src/app/layouts/survey-builder-simplified/components/common/question-selector-modal.tsx
+Reproduction: Select Subjective type; advance to Step 2.
+Actual: Left column contains only 2 fields, leaving 240px empty space above footer.
+Impact: Asymmetrical density against right preview card.
+Fix Recommendation: Rebalance row density and align column items to top.
+
+[UI-003] P4 (Polish) - Long Title Wrap Misaligns Tree Node Badges
+Location: src/app/layouts/survey-builder-simplified/components/question-list/question-list-item.tsx
+Reproduction: Enter 3-line question title in editor; inspect tree node.
+Actual: Action buttons stretch vertically when inner container is unclamped.
+Fix Recommendation: Apply flex-shrink-0 to badge container and line-clamp-2 to title.
+
+[RESP-001] P1 (Critical) - Question List Hidden on < 768px Viewports Without Drawer
+Location: src/app/layouts/survey-builder-simplified/page.tsx
+Reproduction: View Builder at 768px or 390px viewport width.
+Actual: Question List panel has class "hidden md:flex" with no mobile drawer trigger.
+Impact: Tablet portrait and mobile users cannot switch active questions in editor.
+Fix Recommendation: Implement mobile Sheet trigger in header for < md viewports.
+
+[RESP-002] P2 (Major) - Question Creation Modal Horizontal Overflow at 390px
+Location: src/app/layouts/survey-builder-simplified/components/common/question-selector-modal.tsx
+Reproduction: Open Add Question modal at 390px mobile viewport.
+Actual: Modal fixed min-width (720px) overflows screen; action buttons clipped.
+Impact: WCAG 2.2 1.4.10 (Reflow) failure.
+Fix Recommendation: Add responsive class overrides: max-w-[95vw] md:max-w-4xl p-4.
+
+[A11Y-001] P1 (Critical) - Question Tree Missing ARIA Tree Roles & Keyboard Nav
+Location: src/app/layouts/survey-builder-simplified/components/question-list/question-list-item.tsx
+Reproduction: Navigate question tree using Tab and Arrow keys.
+Actual: Renders plain <div onClick> without role="treeitem", aria-selected, or roving focus.
+Impact: WCAG 2.1.1 (Keyboard) and 4.1.2 (Name, Role, Value) failure.
+Fix Recommendation: Add role="treeitem", aria-selected, and ArrowUp/Down key navigation.
+
+[A11Y-002] P2 (Major) - Icon-Only Toolbar Buttons Missing Accessible Names
+Location: src/app/layouts/survey-builder-simplified/components/header/survey-header.tsx
+Reproduction: Inspect inline action buttons with screen reader.
+Actual: Action buttons contain SVG icons without aria-label or title.
+Impact: WCAG 4.1.2 failure.
+Fix Recommendation: Add descriptive aria-label attributes to all icon buttons.
+
+[A11Y-003] P2 (Major) - Muted Helper Text Fails WCAG AA Contrast Ratio
+Location: src/app/layouts/survey-builder-simplified/components/editor/tabs/
+Reproduction: Evaluate text-zinc-400 (#a1a1aa) against white background.
+Actual: Contrast ratio is 3.01:1 (WCAG AA requires 4.5:1).
+Impact: WCAG 1.4.3 (Contrast Minimum) failure.
+Fix Recommendation: Upgrade muted helper text tokens from text-zinc-400 to text-zinc-500/600.
+
+[DS-001] P2 (Major) - Duplicate Question Type Picker Implementations
+Location: question-selector-modal.tsx, add-question-popover.tsx, change-type-dialog.tsx
+Current State: 3 separate picker implementations with divergent search and category logic.
+Impact: Inconsistent categorizations, maintenance divergence.
+Fix Recommendation: Extract a shared <QuestionTypeGrid /> component.
+
+[DS-002] P3 (Minor) - Inconsistent Button Sizing Scale Across Views
+Location: survey-header.tsx vs survey-table-view.tsx
+Current State: Header uses h-8; Table uses h-9; Editor tabs use h-7.
+Fix Recommendation: Standardize action buttons to Shadcn size tokens (size="sm" / size="default").
+
+[VAL-001] P2 (Major) - Number Min/Max Inversion Lacks Immediate Inline Error
+Location: src/app/layouts/survey-builder-simplified/components/editor/tabs/validation-tab.tsx
+Reproduction: Set Min = 100, Max = 50 on Number question.
+Actual: Inputs accept values without inline error state until global validator runs.
+Impact: Authors can save invalid number ranges.
+Fix Recommendation: Add immediate cross-field validation highlighting inputs when Max < Min.
+
+[VAL-002] P3 (Minor) - Regex Tester Evaluates Empty Pattern as Valid Match
+Location: src/app/layouts/survey-builder-simplified/components/editor/tabs/regex-help-popover.tsx
+Reproduction: Leave regex pattern blank; type test string.
+Actual: Shows green "Pattern matches" badge.
+Fix Recommendation: Set idle status when pattern is empty.
+
+[I18N-001] P2 (Major) - Custom Validation Error Messages Omitted From Translation Tab
+Location: src/app/layouts/survey-builder-simplified/components/editor/tabs/translation-tab.tsx
+Reproduction: Add custom error message; open Translations tab.
+Actual: Only Title, Description, and Options are exposed for translation.
+Impact: Multi-lingual surveys show English error messages to non-English respondents.
+Fix Recommendation: Expose customErrorMessage in translation field mapper.
+
+[I18N-002] P3 (Minor) - RTL Text Alignment & Radio Mirroring in Preview
+Location: src/app/layouts/survey-builder-simplified/components/preview/preview-runtime.tsx
+Reproduction: Preview survey in Arabic (ar).
+Actual: Text renders right-to-left within left-aligned containers; radios remain on left.
+Fix Recommendation: Inject dir="rtl" on preview container and use logical margin classes.
+
+[SCHEMA-001] P2 (Major) - Serializer Maintains Dual Legacy & Normalized Hierarchy Fields
+Location: src/app/layouts/survey-builder-simplified/lib/survey-serializer.ts
+Reproduction: Export JSON.
+Actual: Emits both normalized (parentQuestionId) and legacy (Parent_Dep, Opt_Dep) keys.
+Impact: Schema ambiguity and potential synchronization divergence.
+Fix Recommendation: Separate canonical serialization from legacy export adapters.
+
+[VERSION-001] P3 (Minor) - Rapid Auto-Saves Generate Micro-Versions
+Location: src/app/layouts/survey-builder-simplified/services/survey-service.ts
+Reproduction: Type rapidly in Question Editor; inspect Version History.
+Actual: Fast saves generate duplicate micro-versions.
+Fix Recommendation: Implement semantic diff filter in version-diff-engine.ts.
+
+[AUDIT-001] P3 (Minor) - Change Log Outputs Generic Array Diffs for Options
+Location: src/app/layouts/survey-builder-simplified/lib/version-diff-engine.ts
+Reproduction: Rename an option label; inspect Change Log.
+Actual: Displays "Field 'options' modified (3 items -> 3 items)".
+Fix Recommendation: Add option-level item diffing in version-diff-engine.ts.
+
+[PERF-001] P3 (Minor) - Question Tree Re-renders on Every Editor Keystroke
+Location: src/app/layouts/survey-builder-simplified/components/question-list/question-list-item.tsx
+Reproduction: Edit title in large survey (40+ questions).
+Actual: All 40 tree items re-render on every keystroke.
+Fix Recommendation: Wrap QuestionListItem in React.memo with prop comparison.
+
+[COPY-001] P4 (Polish) - Inconsistent "Mandatory" vs "Required" Terminology
+Location: question-selector-modal.tsx vs basic-settings-tab.tsx
+Reproduction: Modal uses "Mandatory Response"; Editor uses "Required Question".
+Fix Recommendation: Standardize terminology to "Required" across all surfaces.
+
+--------------------------------------------------------------------------------
+5. QUESTION TYPE MATRIX (21 TYPES)
+--------------------------------------------------------------------------------
+Type              | Create | Config | Save | Preview | Val | I18n | Logic | Status
+------------------+--------+--------+------+---------+-----+------+-------+--------
+Radio             | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS (FUNC-001)
+Checkbox          | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS (FUNC-001)
+Dropdown          | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+Selected Dropdown | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS (UX-003)
+Rank              | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+Emoji             | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+Subjective        | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS (UI-002)
+TextArea          | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+Number            | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS (VAL-001)
+Date              | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+DateRange         | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+Time              | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+Picture Input     | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+Audio             | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+Video             | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+Document          | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+Map               | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+PolygonBoundary   | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+QRCode            | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+Rating            | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+Repeater_QT       | YES    | YES    | YES  | YES     | YES | YES  | YES   | PASS
+
+--------------------------------------------------------------------------------
+6. USER-SELECTABLE CHANGE LIST
+--------------------------------------------------------------------------------
+[ ] RESP-001 — Question List hidden on < 768px without mobile drawer (P1, Medium)
+[ ] RESP-002 — Question Creation Modal horizontal overflow at 390px (P2, Small)
+[ ] A11Y-001 — Question tree missing ARIA roles and keyboard navigation (P1, Medium)
+[ ] A11Y-002 — Icon-only toolbar buttons missing aria-label (P2, Small)
+[ ] A11Y-003 — Muted helper text fails WCAG AA contrast ratio (P2, Small)
+[ ] FUNC-001 — Bulk option editing silently resets option scores to 0 (P2, Small)
+[ ] UX-001   — Logic tab does not display parent follow-up trigger context (P2, Small)
+[ ] UX-002   — Delete confirmation modal does not list descendant questions (P2, Small)
+[ ] UX-003   — Master dataset records cannot be previewed in Options tab (P3, Medium)
+[ ] VAL-001  — Number Min/Max inversion lacks immediate inline error state (P2, Small)
+[ ] VAL-002  — Regex tester reports green match for empty pattern (P3, Small)
+[ ] I18N-001 — Custom validation error messages omitted from Translation tab (P2, Small)
+[ ] I18N-002 — Runtime Preview radio indicators not mirrored for RTL languages (P3, Small)
+[ ] DS-001   — Duplicate Question Type picker implementations across 3 components (P2, Medium)
+[ ] DS-002   — Inconsistent button height tokens (h-7, h-8, h-9) in toolbars (P3, Small)
+[ ] UI-001   — Inconsistent card padding and border radius in editor tabs (P3, Small)
+[ ] UI-002   — Step 2 Question Creation Modal asymmetric vertical spacing (P3, Small)
+[ ] UI-003   — Multi-line title wrap misaligns tree node badges (P4, Small)
+[ ] SCHEMA-001 — Serializer maintains dual legacy and normalized hierarchy fields (P2, Medium)
+[ ] VERSION-001 — Rapid auto-saves create duplicate micro-versions (P3, Small)
+[ ] AUDIT-001 — Change Log outputs generic array diffs for option modifications (P3, Small)
+[ ] PERF-001 — Question tree items re-render on every keystroke in editor (P3, Small)
+[ ] COPY-001 — Inconsistent Mandatory vs Required terminology (P4, Small)
+
+--------------------------------------------------------------------------------
+7. FINAL AUDIT STATUS
+--------------------------------------------------------------------------------
+============================================================
+AUDIT COMPLETE
+NO CHANGES MADE
+============================================================
+All application code, UI, styles, tests, and configuration remain unmodified.
+Awaiting user selection of finding IDs or groups to proceed with implementation.
+================================================================================

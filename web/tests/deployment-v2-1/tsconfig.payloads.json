@@ -1,0 +1,28 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "target": "es2022",
+        "lib": ["es2022", "dom"],
+        "strict": true,
+        "skipLibCheck": true,
+        "esModuleInterop": true,
+        "moduleResolution": "node",
+        "resolveJsonModule": true,
+        "noEmitOnError": false,
+        "types": ["node"],
+        "jsx": "preserve",
+        "baseUrl": "../..",
+        "paths": { "@/*": ["src/*"] },
+        "rootDir": "../../src",
+        "outDir": "out"
+    },
+    "files": [
+        "../../src/app/layouts/deployment-v2-1/data/request-builders.ts",
+        "../../src/app/layouts/deployment-v2-1/data/boundary-gate.ts",
+        "../../src/app/layouts/deployment-v2-1/data/boundary-coverage.ts",
+        "../../src/app/layouts/deployment-v2-1/data/dispatch-rows.ts",
+        "../../src/app/layouts/deployment-v2-1/data/farmer-header-totals.ts",
+        "../../src/app/layouts/deployment-v2-1/components/deployment-dispatch-view.ts",
+        "../../src/app/layouts/deployment-v2-1/components/deployment-types.ts"
+    ]
+}

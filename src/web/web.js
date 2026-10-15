@@ -1,6 +1,5 @@
 import { db, q, esc, date, when, toast, run } from "../lib/db.js";
 import { ui, field } from "../lib/ui.js";
-import { templateEditor } from "./template-editor.js";
 
 const main = document.getElementById("main");
 const crumbs = document.getElementById("crumbs");
@@ -21,27 +20,10 @@ window.addEventListener("hashchange", route);
 route();
 
 function route() {
-  const [, section = "templates", id] = location.hash.split("/");
+  const [, section = "seasons", id] = location.hash.split("/");
   document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("bg-sidebar-accent", a.dataset.nav === section));
   document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("font-medium", a.dataset.nav === section));
-  run(() => ({ templates: id ? (i) => templateEditor(main, crumbs, i) : templateList, seasons: id ? seasonPage : seasonList })[section](id));
-}
-
-// ───────── Survey Templates ─────────
-async function templateList() {
-  crumbs.textContent = "Survey Templates";
-  const list = await q(db.from("survey_template_master").select("id, name, az_name, version, questions, statuses").order("name"));
-  main.innerHTML = `
-    <div class="mb-4 flex items-center justify-between"><h1 class="text-2xl font-semibold tracking-tight">Survey Templates</h1><a href="#/templates/new" class="${ui.btn}">New survey template</a></div>
-    <input id="search" placeholder="Search surveys" class="${ui.input} mb-4 max-w-sm">
-    <div class="${ui.card}"><table class="${ui.table}"><thead><tr class="border-b"><th class="${ui.th}">Survey</th><th class="${ui.th}">AZ</th><th class="${ui.th}">Questions</th><th class="${ui.th}">Statuses</th><th class="${ui.th}">Version</th></tr></thead><tbody id="rows"></tbody></table><div id="none"></div></div>`;
-  const draw = (f = "") => {
-    const rows = list.filter((t) => t.name.toLowerCase().includes(f.toLowerCase()));
-    main.querySelector("#rows").innerHTML = rows.map((t) => `<tr class="${ui.tr} cursor-pointer" onclick="location.hash='#/templates/${t.id}'"><td class="${ui.td} font-medium">${esc(t.name)}</td><td class="${ui.td}">${esc(t.az_name ?? "")}</td><td class="${ui.td}">${t.questions.length}</td><td class="${ui.td}">${t.statuses.map((s) => `<span class="${ui.badgeSec} mr-1">${esc(s)}</span>`).join("")}</td><td class="${ui.td}">v${t.version}</td></tr>`).join("");
-    main.querySelector("#none").innerHTML = rows.length ? "" : empty("No survey templates yet.");
-  };
-  draw();
-  main.querySelector("#search").oninput = (e) => draw(e.target.value);
+  run(() => ({ seasons: id ? seasonPage : seasonList })[section] ? ({ seasons: id ? seasonPage : seasonList })[section](id) : (location.hash = "#/seasons"));
 }
 
 // ───────── Season Management ─────────
