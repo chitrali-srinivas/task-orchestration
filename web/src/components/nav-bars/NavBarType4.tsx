@@ -142,8 +142,6 @@ function NavBarType4Content({ children, pageTitle, initialActiveItemUrl, pageDes
             <SidebarInset>
                 <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4 min-w-0 w-full overflow-hidden">
                     <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
-                        <SidebarTrigger className="-ml-1 shrink-0" />
-                        <Separator orientation="vertical" className="mr-2 h-4 shrink-0" />
                         <Breadcrumb className="min-w-0 flex-1 overflow-hidden">
                             <BreadcrumbList className="flex-nowrap overflow-hidden">
                                 <BreadcrumbItem className="flex items-center gap-2 min-w-0 overflow-hidden">
@@ -277,7 +275,11 @@ function AppSidebar({
     const others = (data as any).others || []
 
     return (
-        <Sidebar collapsible="icon" className="bg-white border-r" {...props}>
+        <Sidebar collapsible="icon" className="bg-white border-r group/nav" {...props}>
+            {/* Collapse / expand: appears when hovering the sidebar (the rail on the edge toggles it too) */}
+            <SidebarTrigger
+                className="absolute right-1 top-2 z-10 h-6 w-6 text-zinc-400 opacity-0 transition-opacity hover:text-zinc-900 group-hover/nav:opacity-100 group-data-[collapsible=icon]:hidden"
+            />
             <SidebarHeader className="bg-white">
                 <SidebarMenu>
                     <SidebarMenuItem>
