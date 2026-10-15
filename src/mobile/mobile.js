@@ -80,7 +80,7 @@ function control(f, v, on, name = f.key) {
     case "Map":               return pair("lat", "lng", "number", ["Latitude", "Longitude"]) + (on ? `<button type="button" data-gps="${n}" class="${ui.sm} mt-2">Use my location</button>` : "");
     case "PolygonBoundary":   return `<textarea name="${n}" rows="3" placeholder="lat,lng per line" ${dis} ${req} class="${ui.input} h-auto font-mono text-xs">${esc(v ?? "")}</textarea>`;
     case "QRCode":            return text("text", 'placeholder="Scan or type the code"');
-    case "Repeater_QT":       return repeater(f, v, on, name);
+    case "Repeater_QT":       return f.repeater ? repeater(f, v, on, name) : `<p class="text-xs text-muted-foreground">This repeater has no questions yet (set them up in HQ Admin).</p>`;
     default:                  return text("text", `${f.minLength ? `minlength="${f.minLength}"` : ""} ${f.maxLength ? `maxlength="${f.maxLength}"` : ""} ${f.regex ? `pattern="${esc(f.regex)}"` : ""}`);
   }
 }
@@ -116,6 +116,7 @@ function readAnswer(fd, f, name, all) {
     case "Number": case "Rating": case "Emoji": { const x = fd.get(name); return x === "" || x == null ? null : Number(x); }
     case "Picture Input": case "Audio": case "Video": case "Document": { const file = fd.get(name); return file?.name || null; }
     case "Repeater_QT": {
+      if (!f.repeater) return null;
       const self = f.repeater.countSource === "self" ? { count: Number(fd.get(`${name}.count`)) || 0 } : {};
       const count = f.repeater.countSource === "self" ? self.count : repeatCount(f, null, all);
       return { ...self, items: Array.from({ length: Math.min(count, 50) }, (_, i) => Object.fromEntries(f.repeater.children.map((c) => [c.key, readAnswer(fd, c, `${name}[${i}].${c.key}`, all)]))) };

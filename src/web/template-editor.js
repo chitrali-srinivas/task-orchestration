@@ -18,6 +18,7 @@ export async function templateEditor(main, crumbs, id) {
     ? { name: "", az_name: "", questions: [], statuses: ["planned", "collected"] }
     : await q(db.from("survey_template_master").select("*").eq("id", id).single());
   crumbs.innerHTML = `<a href="#/templates" class="hover:text-foreground">Survey Templates</a> <span class="mx-1">›</span> ${id === "new" ? "New" : esc(t.name)}`;
+  t.questions.forEach((x) => { if (x.type === "Repeater_QT" && !x.repeater) x.repeater = newQuestion("Repeater_QT").repeater; });
   let sel = "survey", tab = "basic", picker = null;   // picker: null | "top" | { parent: index }
 
   const listItem = (x, label, i, nested = false) => `
