@@ -639,34 +639,6 @@ export function QuestionListPanel({
                     />
                 </div>
 
-                {/* Filter tags bar */}
-                <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none">
-                    {(
-                        [
-                            { tag: "ALL" as FilterTag, label: "All", count: counts.all },
-                            { tag: "REQUIRED" as FilterTag, label: "Required", count: counts.required },
-                            { tag: "CONDITIONAL" as FilterTag, label: "Conditional", count: counts.conditional },
-                            { tag: "REPEATER" as FilterTag, label: "Repeater", count: counts.repeater },
-                            ...(counts.issues > 0
-                                ? [{ tag: "ISSUES" as FilterTag, label: "Issues", count: counts.issues }]
-                                : []),
-                        ]
-                    ).map(({ tag, label, count }) => (
-                        <button
-                            key={tag}
-                            type="button"
-                            onClick={() => setFilterTag(tag)}
-                            className={cn(
-                                "text-[10px] px-2 py-0.5 rounded transition-colors shrink-0 font-medium",
-                                filterTag === tag
-                                    ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs"
-                                    : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100/80 dark:hover:bg-zinc-800/50"
-                            )}
-                        >
-                            {label} ({count})
-                        </button>
-                    ))}
-                </div>
             </div>
 
             {/* Questions Native Scrollable List */}
