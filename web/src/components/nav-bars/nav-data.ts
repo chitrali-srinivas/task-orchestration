@@ -256,7 +256,7 @@ export const data = {
         },
         {
             title: "Survey Workflow",
-            url: "/layouts/season-management",
+            url: "/layouts/survey-workflow",
             icon: Workflow,
             roles: ["HQ Admin"] as UserRole[],
         },
