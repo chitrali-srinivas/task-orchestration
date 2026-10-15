@@ -21,10 +21,10 @@ import {
     FolderKanban,
     Copy,
     Settings2,
+    Languages,
     Pencil,
     Clock,
     LayoutGrid,
-    Table,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -312,7 +312,7 @@ export function SurveyHeader({
                     )}
                 </div>
 
-                {/* Center / Right: Builder vs Table View Switcher */}
+                {/* Center / Right: Builder vs Translations switcher (view key 'table' kept for the page state) */}
                 {onViewChange && (
                     <div className="flex items-center p-0.5 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
                         <button
@@ -338,8 +338,8 @@ export function SurveyHeader({
                                     : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
                             )}
                         >
-                            <Table className="h-3.5 w-3.5" />
-                            <span>Table View</span>
+                            <Languages className="h-3.5 w-3.5" />
+                            <span>Translations</span>
                         </button>
                     </div>
                 )}
@@ -363,34 +363,6 @@ export function SurveyHeader({
                         <span className="hidden sm:inline">Preview</span>
                     </Button>
 
-                    {/* Validation Drawer Button */}
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setValidationSheetOpen(true)}
-                        className={cn(
-                            "h-8 px-2.5 text-xs gap-1.5 border transition-all",
-                            validation.errorCount > 0
-                                ? "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
-                                : validation.warningCount > 0
-                                ? "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
-                                : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                        )}
-                    >
-                        {validation.errorCount > 0 ? (
-                            <AlertCircle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
-                        ) : (
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                        )}
-                        <span className="hidden md:inline">Validation</span>
-                        <span className="font-mono text-[10px] font-bold">
-                            {validation.errorCount > 0
-                                ? `${validation.errorCount} errors`
-                                : validation.warningCount > 0
-                                ? `${validation.warningCount} warns`
-                                : "0 issues"}
-                        </span>
-                    </Button>
 
                     {/* Version History Button */}
                     <Button
