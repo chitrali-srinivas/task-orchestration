@@ -260,19 +260,14 @@ async function runTestSuite() {
     // 14. Feature 5: Centralized Master Data Registry & Combobox Query
     console.log("\n--- 14. Testing Feature 5: Master Data Registry ---");
     const { MASTER_SETS, getMasterSetById, searchMasterRecords } = await import("./lib/master-data-registry");
-    assert(MASTER_SETS.length >= 5, "Registered master datasets: trucks, villages, bases, surveyors, crops");
+    assert(MASTER_SETS.length === 2, "Registered master datasets: suppliers, fleet");
 
-    const truckSet = getMasterSetById("trucks");
-    assert(Boolean(truckSet), "Trucks master set found");
-    assert(Boolean(truckSet?.fields.some((f) => f.key === "vehicleNumber")), "Truck dataset has vehicleNumber field");
+    const truckSet = getMasterSetById("fleet");
+    assert(Boolean(truckSet), "Fleet master set found");
+    assert(Boolean(truckSet?.fields.some((f) => f.key === "vehicleNumber")), "Fleet master has vehicleNumber field");
 
-    // Search master records
-    const searchTrucks = searchMasterRecords("trucks", "KA01");
-    assert(searchTrucks.length > 0, "Search query 'KA01' matched truck records");
-    assert(searchTrucks[0].vehicleNumber.includes("KA01"), "Primary display field matches query");
-
-    const searchSurveyors = searchMasterRecords("surveyors", "Prakash");
-    assert(searchSurveyors.length > 0, "Search query 'Prakash' matched surveyor record");
+    // Records come from the Masters page (localStorage); with none stored, search returns nothing.
+    assert(Array.isArray(searchMasterRecords("fleet", "KA01")), "Search on an empty master returns an array");
 
     // 15. Feature 6: Scheduling & Multi-Schedule Availability Engine
     console.log("\n--- 15. Testing Feature 6: Scheduling Engine ---");

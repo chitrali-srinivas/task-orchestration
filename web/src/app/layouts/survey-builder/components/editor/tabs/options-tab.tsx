@@ -24,7 +24,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { OptionItem, QuestionModel } from "../../../types/survey-schema";
-import { MASTER_SETS, getMasterSetById } from "../../../lib/master-data-registry";
+import { MASTER_DEFINITIONS, getMasterSets, getMasterSetById } from "../../../lib/master-data-registry";
 
 interface OptionsTabProps {
     question: QuestionModel;
@@ -146,8 +146,10 @@ export function OptionsTab({
 
 
     const isMasterSource = question.optionSource === "master";
-    const masterConfig = question.masterDataConfig || { masterSetId: "trucks" };
-    const selectedMaster = getMasterSetById(masterConfig.masterSetId) || MASTER_SETS[0];
+    const defaultMasterId = MASTER_DEFINITIONS[0].id;
+    const masterSets = getMasterSets();
+    const masterConfig = question.masterDataConfig || { masterSetId: defaultMasterId };
+    const selectedMaster = getMasterSetById(masterConfig.masterSetId) || masterSets[0];
 
     const handleOptionSourceChange = (source: "custom" | "master") => {
         if (source === "master") {
@@ -155,7 +157,7 @@ export function OptionsTab({
                 ...question,
                 optionSource: "master",
                 masterDataConfig: {
-                    masterSetId: masterConfig.masterSetId || "trucks",
+                    masterSetId: masterConfig.masterSetId || defaultMasterId,
                     displayField: selectedMaster.displayFieldKey,
                 },
             });
@@ -253,18 +255,18 @@ export function OptionsTab({
                     <div className="p-4 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xs space-y-4">
                         <div className="space-y-1.5">
                             <Label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                                Master Set Registry
+                                Master
                             </Label>
                             <Select
                                 disabled={isPublished}
-                                value={masterConfig.masterSetId || "trucks"}
+                                value={masterConfig.masterSetId || defaultMasterId}
                                 onValueChange={handleSelectMasterSet}
                             >
                                 <SelectTrigger className="h-9 text-xs bg-zinc-50/50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
                                     <SelectValue placeholder="Select master dataset..." />
                                 </SelectTrigger>
                                 <SelectContent className="text-xs">
-                                    {MASTER_SETS.map((m) => (
+                                    {masterSets.map((m) => (
                                         <SelectItem key={m.id} value={m.id}>
                                             <div className="flex items-center gap-2">
                                                 <Database className="h-3.5 w-3.5 text-zinc-500" />
@@ -320,7 +322,7 @@ export function OptionsTab({
                                             </span>
                                         </div>
                                         <Badge variant="outline" className="text-[10px] font-mono text-zinc-500 border-zinc-200 dark:border-zinc-700">
-                                            {selectedMaster.sampleRecords.length} sample records
+                                            {selectedMaster.sampleRecords.length} {selectedMaster.sampleRecords.length === 1 ? "record" : "records"}
                                         </Badge>
                                     </div>
 
@@ -346,8 +348,14 @@ export function OptionsTab({
                                     {/* Sample Records Box */}
                                     <div className="space-y-1">
                                         <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">
-                                            Sample Live Records
+                                            Records
                                         </span>
+                                        {selectedMaster.sampleRecords.length === 0 && (
+                                            <p className="text-[11px] text-zinc-500">
+                                                No records yet. Add them on the{" "}
+                                                <a href="/layouts/masters" className="font-semibold underline underline-offset-2 hover:text-zinc-900 dark:hover:text-zinc-100">Masters</a> page.
+                                            </p>
+                                        )}
                                         <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                                             {selectedMaster.sampleRecords.slice(0, 4).map((rec, i) => (
                                                 <div
@@ -366,9 +374,6 @@ export function OptionsTab({
                                                 </div>
                                             ))}
                                         </div>
-                                        <p className="text-[10px] text-zinc-400 italic pt-1">
-                                            * Preview data only. Response storage saves stable master identity ({selectedMaster.id} / record ID).
-                                        </p>
                                     </div>
                                 </div>
                             </div>

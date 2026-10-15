@@ -551,6 +551,8 @@ export function PreviewAllQuestions({
     onSelectQuestion,
 }: PreviewAllQuestionsProps) {
     const defaultLocale = survey.defaultLocale || "en";
+    // Tapping a master-data field opens the catalog page (records from the Masters page) over the form.
+    const [activeMaster, setActiveMaster] = useState<{ question: QuestionModel; answerKey: string } | null>(null);
     const childIds = useMemo(() => {
         const ids = new Set<string>();
         survey.questions.forEach((q) => (q.repeater?.isRepeater ? q.repeater.childQuestionIds || [] : []).forEach((id) => ids.add(id)));
@@ -569,7 +571,7 @@ export function PreviewAllQuestions({
     };
     const entryLabel = (q: QuestionModel, i: number) => (q.repeater?.itemLabelTemplate || "Entry #{index}").replace("#{index}", String(i + 1));
 
-    const card = (q: QuestionModel, value: any, onChange: (v: any) => void, visibleAnswers: Record<string, any>, nested: boolean, children?: React.ReactNode) => (
+    const card = (q: QuestionModel, value: any, onChange: (v: any) => void, visibleAnswers: Record<string, any>, nested: boolean, children?: React.ReactNode, answerKey: string = q.id) => (
         <div
             key={q.id}
             onClick={() => onSelectQuestion?.(q.id)}
@@ -589,7 +591,9 @@ export function PreviewAllQuestions({
             </div>
             <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 leading-snug">{title(q) || <span className="italic text-zinc-400">Untitled question</span>}</p>
             {hint(q) && <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{hint(q)}</p>}
-            <div onClick={(e) => e.stopPropagation()}>{renderPreviewField(q, value, onChange, locale, () => {})}</div>
+            <div onClick={(e) => e.stopPropagation()}>
+                {renderPreviewField(q, value, onChange, locale, (mq) => setActiveMaster({ question: mq, answerKey }))}
+            </div>
             {children}
         </div>
     );
@@ -614,7 +618,7 @@ export function PreviewAllQuestions({
                         {visible.length === 0 ? (
                             <p className="text-[11px] italic text-zinc-400">No questions in this block yet.</p>
                         ) : (
-                            visible.map((c) => card(c, runtimeAnswers[`${c.id}_inst_${i}`], (v) => onChangeAnswer(`${c.id}_inst_${i}`, v), scoped, true))
+                            visible.map((c) => card(c, runtimeAnswers[`${c.id}_inst_${i}`], (v) => onChangeAnswer(`${c.id}_inst_${i}`, v), scoped, true, undefined, `${c.id}_inst_${i}`))
                         )}
                     </div>
                 </div>
@@ -632,6 +636,18 @@ export function PreviewAllQuestions({
 
     const block = (q: QuestionModel) =>
         q.repeater?.isRepeater ? repeaterBlock(q) : card(q, runtimeAnswers[q.id], (v) => onChangeAnswer(q.id, v), runtimeAnswers, false);
+
+    if (activeMaster) {
+        return (
+            <PreviewMasterCatalogPage
+                question={activeMaster.question}
+                value={runtimeAnswers[activeMaster.answerKey]}
+                onConfirm={(v) => onChangeAnswer(activeMaster.answerKey, v)}
+                onBack={() => setActiveMaster(null)}
+                locale={locale}
+            />
+        );
+    }
 
     return (
         <div className="h-full overflow-y-auto p-3 space-y-3 bg-white dark:bg-zinc-950">
