@@ -30,7 +30,8 @@ import {
     CalendarCheck,
     LayoutPanelLeft,
     Workflow,
-    Database
+    Database,
+    Smartphone
 } from "lucide-react"
 
 export type UserRole = "Verifier" | "Admin" | "HQ Verifier" | "HQ Admin";
@@ -258,6 +259,18 @@ export const data = {
             title: "Survey Workflow",
             url: "/layouts/survey-workflow",
             icon: Workflow,
+            roles: ["HQ Admin"] as UserRole[],
+        },
+        {
+            title: "Tasks",
+            url: "/layouts/tasks",
+            icon: ListTodo,
+            roles: ["HQ Admin"] as UserRole[],
+        },
+        {
+            title: "Phone simulator",
+            url: "/phone",
+            icon: Smartphone,
             roles: ["HQ Admin"] as UserRole[],
         },
         {

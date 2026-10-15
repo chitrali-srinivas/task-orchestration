@@ -386,7 +386,7 @@ export interface SurveyModel {
 }
 
 // Default task statuses for a survey: 1st = task created, 2nd = surveyor submitted, the rest are set by the verifier.
-export const DEFAULT_SURVEY_STATUSES: string[] = ["planned", "collected"];
+export const DEFAULT_SURVEY_STATUSES: string[] = ["planned", "collected", "verified", "expired", "cancelled"];
 
 export interface SurveyVersionSnapshot {
     version: number;
