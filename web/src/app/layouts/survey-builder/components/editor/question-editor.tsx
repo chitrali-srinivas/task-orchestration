@@ -9,7 +9,6 @@ import {
     SlidersHorizontal,
     Layers,
     Lock,
-    Copy,
     Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -99,16 +98,6 @@ export function QuestionEditor({
 
                 {/* Header Action Buttons */}
                 <div className="flex items-center gap-1.5 shrink-0">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onDuplicateQuestion(question.id)}
-                        className="h-8 px-2.5 text-xs text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 gap-1"
-                    >
-                        <Copy className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Duplicate</span>
-                    </Button>
-
                     <Button
                         variant="ghost"
                         size="sm"
