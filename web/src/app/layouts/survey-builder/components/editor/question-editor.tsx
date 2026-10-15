@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import {
     Sliders,
-    ListChecks,
     ShieldCheck,
     GitBranch,
     Languages,
@@ -141,23 +140,6 @@ export function QuestionEditor({
                         <span>Basic</span>
                     </button>
 
-                    {/* Options Tab (for choice types) */}
-                    {isChoiceType && (
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab("options")}
-                            className={cn(
-                                "flex items-center gap-1.5 px-1 py-2 text-xs font-semibold transition-all border-b-2 -mb-px shrink-0 cursor-pointer",
-                                activeTab === "options"
-                                    ? "border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100"
-                                    : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300"
-                            )}
-                        >
-                            <ListChecks className="h-3.5 w-3.5" />
-                            <span>Options ({question.options?.length || 0})</span>
-                        </button>
-                    )}
-
                     {/* Validation Tab */}
                     <button
                         type="button"
@@ -241,19 +223,21 @@ export function QuestionEditor({
             <div className="flex-1 overflow-y-auto min-h-0 p-5 bg-zinc-50/40 dark:bg-zinc-950/40">
                 <div className="max-w-4xl mx-auto">
                     {activeTab === "basic" && (
-                        <BasicSettingsTab
-                            question={question}
-                            onChangeQuestion={onChangeQuestion}
-                            isPublished={isPublished}
-                        />
-                    )}
-
-                    {activeTab === "options" && isChoiceType && (
-                        <OptionsTab
-                            question={question}
-                            onChangeQuestion={onChangeQuestion}
-                            isPublished={isPublished}
-                        />
+                        <div className="space-y-6">
+                            <BasicSettingsTab
+                                question={question}
+                                onChangeQuestion={onChangeQuestion}
+                                isPublished={isPublished}
+                            />
+                            {/* Choices live on the Basic tab for choice-type questions */}
+                            {isChoiceType && (
+                                <OptionsTab
+                                    question={question}
+                                    onChangeQuestion={onChangeQuestion}
+                                    isPublished={isPublished}
+                                />
+                            )}
+                        </div>
                     )}
 
                     {activeTab === "validation" && (

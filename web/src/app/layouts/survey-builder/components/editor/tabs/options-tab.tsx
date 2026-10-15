@@ -5,7 +5,6 @@ import {
     Plus,
     Trash2,
     GripVertical,
-    Sparkles,
     ArrowUp,
     ArrowDown,
     List,
@@ -33,38 +32,6 @@ interface OptionsTabProps {
     isPublished?: boolean;
 }
 
-const OPTION_PRESETS = [
-    {
-        name: "Yes / No",
-        options: [
-            { value: "yes", labels: { en: "Yes", hi: "हाँ" } },
-            { value: "no", labels: { en: "No", hi: "नहीं" } },
-        ],
-    },
-    {
-        name: "Pass / Fail",
-        options: [
-            { value: "pass", labels: { en: "Pass (Approved)", hi: "उत्तीर्ण (स्वीकृत)" } },
-            { value: "fail", labels: { en: "Fail (Rejected)", hi: "अनुत्तीर्ण (अस्वीकृत)" } },
-        ],
-    },
-    {
-        name: "High / Med / Low",
-        options: [
-            { value: "high", labels: { en: "High", hi: "उच्च" } },
-            { value: "medium", labels: { en: "Medium", hi: "मध्यम" } },
-            { value: "low", labels: { en: "Low", hi: "निम्न" } },
-        ],
-    },
-    {
-        name: "Soil Situations",
-        options: [
-            { value: "sandy", labels: { en: "Sandy Soil", hi: "बलुई मिट्टी" } },
-            { value: "clay", labels: { en: "Clay Loam", hi: "चिकनी दोमट" } },
-            { value: "saline", labels: { en: "Saline / Alkaline", hi: "खारी / क्षारीय" } },
-        ],
-    },
-];
 
 export function OptionsTab({
     question,
@@ -177,17 +144,6 @@ export function OptionsTab({
         setDragOverIndex(null);
     };
 
-    const handleApplyPreset = (presetOpts: { value: string; labels: { en: string; hi: string } }[]) => {
-        const mapped: OptionItem[] = presetOpts.map((p, idx) => ({
-            id: `opt_${Date.now()}_${idx + 1}`,
-            value: p.value,
-            labels: { en: p.labels.en, hi: p.labels.hi },
-        }));
-        onChangeQuestion({
-            ...question,
-            options: mapped,
-        });
-    };
 
     const isMasterSource = question.optionSource === "master";
     const masterConfig = question.masterDataConfig || { masterSetId: "trucks" };
@@ -422,29 +378,6 @@ export function OptionsTab({
             ) : (
                 /* 3. BESPOKE CUSTOM OPTIONS CONFIGURATION */
                 <div className="space-y-6">
-                    {/* Quick Option Presets */}
-                    <div className="p-4 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xs space-y-2.5">
-                        <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                            <Sparkles className="h-3.5 w-3.5 text-zinc-500" />
-                            <span>Quick Option Presets</span>
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                            {OPTION_PRESETS.map((preset) => (
-                                <Button
-                                    key={preset.name}
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={isPublished}
-                                    onClick={() => handleApplyPreset(preset.options)}
-                                    className="h-7 text-xs border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-                                >
-                                    {preset.name}
-                                </Button>
-                            ))}
-                        </div>
-                    </div>
-
             {/* Configured Choices List */}
             <div className="p-5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xs space-y-4">
                 <div className="flex items-center justify-between">
@@ -453,7 +386,7 @@ export function OptionsTab({
                             Configured Choices ({options.length})
                         </h3>
                         <p className="text-[11px] text-zinc-500 mt-0.5">
-                            Define choices with English & regional Hindi labels and raw backend keys. Drag to reorder.
+                            Add the choices the surveyor can pick. Translations are managed on the Translation tab. Drag to reorder.
                         </p>
                     </div>
 
@@ -545,7 +478,7 @@ export function OptionsTab({
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                                     <div className="space-y-1">
                                         <Label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
                                             English Label <span className="text-zinc-400 font-mono text-[10px]">(Opt_Name)</span>
@@ -561,23 +494,6 @@ export function OptionsTab({
                                                 })
                                             }
                                             className="h-8 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <Label className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
-                                            Hindi Label <span className="text-zinc-400 font-mono text-[10px]">(S_Opt_Name)</span>
-                                        </Label>
-                                        <Input
-                                            placeholder="e.g. हाँ"
-                                            value={opt.labels.hi || ""}
-                                            disabled={isPublished}
-                                            onChange={(e) =>
-                                                handleUpdateOption(idx, {
-                                                    labels: { ...opt.labels, hi: e.target.value },
-                                                })
-                                            }
-                                            className="h-8 text-xs bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-hindi"
                                         />
                                     </div>
 
