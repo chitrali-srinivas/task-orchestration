@@ -1,10 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Sparkles, HelpCircle, Check, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { RegexValidationDialog } from "../regex-validation-dialog";
 import {
     Select,
     SelectContent,
@@ -28,6 +29,9 @@ export function BasicSettingsTab({
     onChangeQuestion,
     isPublished,
 }: BasicSettingsTabProps) {
+    const [regexDialogOpen, setRegexDialogOpen] = useState(false);
+    const hasRegex = Boolean(question.validation.regexPattern);
+
     const handleTitleChange = (locale: string, val: string) => {
         const updatedTitles = { ...question.titles, [locale]: val };
         // If changing english title and column name hasn't been heavily customized, auto-suggest
@@ -106,6 +110,54 @@ export function BasicSettingsTab({
                         }
                     />
                 </div>
+
+                {/* Validation (regex) toggle: switching it on opens the pattern dialog */}
+                <div className="flex items-center justify-between">
+                    <div className="min-w-0">
+                        <Label htmlFor="q-validation" className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                            Validation
+                        </Label>
+                        {hasRegex && (
+                            <button
+                                type="button"
+                                disabled={isPublished}
+                                onClick={() => setRegexDialogOpen(true)}
+                                className="mt-0.5 block max-w-full truncate font-mono text-[11px] text-zinc-500 underline-offset-2 hover:text-zinc-900 hover:underline dark:hover:text-zinc-100"
+                                title="Edit pattern"
+                            >
+                                {question.validation.regexPattern}
+                            </button>
+                        )}
+                    </div>
+                    <Switch
+                        id="q-validation"
+                        checked={hasRegex}
+                        disabled={isPublished}
+                        onCheckedChange={(checked) => {
+                            if (checked) {
+                                setRegexDialogOpen(true);
+                            } else {
+                                onChangeQuestion({
+                                    ...question,
+                                    validation: {
+                                        ...question.validation,
+                                        regexPattern: undefined,
+                                        presetId: undefined,
+                                        validationPresetId: undefined,
+                                        patternDescription: undefined,
+                                        customErrorMessage: undefined,
+                                    },
+                                });
+                            }
+                        }}
+                    />
+                </div>
+                <RegexValidationDialog
+                    open={regexDialogOpen}
+                    onOpenChange={setRegexDialogOpen}
+                    question={question}
+                    onChangeQuestion={onChangeQuestion}
+                />
 
                 {/* Question type & database column */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
