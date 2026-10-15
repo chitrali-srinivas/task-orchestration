@@ -17,6 +17,16 @@ cd web && npm install && npx next dev -p 3100
 
 Storage is the browser's localStorage for now (`mati.surveys`, `mati.workflows`, `mati.masters`, `mati.farmers`, `mati.tasks`, `mati.sim`). Swapping it for Supabase only touches `web/src/lib/orchestration/store.ts` and the per-page loaders.
 
+## Deploy (Cloud Run)
+
+The repository root has a `Dockerfile` that builds the Next.js app in `web/` (standalone output, listens on `$PORT`, default 8080). Point Cloud Run's "deploy from repository" at the repo root with the Dockerfile build type, or:
+
+```bash
+gcloud run deploy task-orchestration --source . --region <region> --allow-unauthenticated
+```
+
+Without Supabase variables the deployed app is the browser-only demo (data per browser).
+
 ## Orchestration framework
 
 ```
