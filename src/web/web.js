@@ -87,7 +87,7 @@ async function seasonPage(id) {
       ${field("Survey", `<input list="surveys" name="survey" placeholder="Search and pick a survey" required class="${ui.input}">`)}
       <datalist id="surveys">${available.map((t) => `<option value="${esc(t.name)}">`).join("")}</datalist>
       ${from ? field(`When status of ${esc(tpl(from).name)} =`, `<select name="on_status" class="${ui.select}">${opt(tpl(from).statuses.map((s) => [s, s]))}</select>`) : ""}
-      ${field("Create task", `<div class="flex gap-2"><select name="mode" class="${ui.select} w-40"><option value="now">Immediately</option><option value="days">After N days</option><option value="date">On date</option></select><input name="days" type="number" min="1" placeholder="days" class="${ui.input} w-24"><input name="start_date" type="date" class="${ui.input} w-44"></div>`)}
+      ${field("Create task", `<div class="flex flex-wrap gap-2"><select name="mode" class="${ui.select} w-40"><option value="now">Immediately</option><option value="days">After N days</option><option value="date">On date</option></select><input name="days" type="number" min="1" placeholder="days" class="${ui.input} w-24"><input name="start_date" type="date" class="${ui.input} w-44"></div>`)}
       ${field("Ends on (optional)", `<input name="end_date" type="date" class="${ui.input} w-44">`)}
       <div class="flex gap-2 pt-1"><button class="${ui.btn}">Add</button><button type="button" data-cancel class="${ui.outline}">Cancel</button></div>
     </form>`;
