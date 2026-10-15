@@ -84,22 +84,7 @@ export function BasicSettingsTab({
                         className="h-10 text-sm bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
                     />
                 </div>
-
-                {/* Hindi Prompt */}
-                <div className="space-y-1.5">
-                    <Label htmlFor="q-title-hi" className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 flex items-center justify-between">
-                        <span>Regional Question Title (Hindi - हिंदी)</span>
-                        <span className="text-[10px] text-zinc-400 font-mono">S_Qn</span>
-                    </Label>
-                    <Input
-                        id="q-title-hi"
-                        placeholder="e.g. क्या आप खेत के मालिक हैं?"
-                        value={question.titles.hi || ""}
-                        disabled={isPublished}
-                        onChange={(e) => handleTitleChange("hi", e.target.value)}
-                        className="h-10 text-sm bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 font-hindi"
-                    />
-                </div>
+                {/* Regional-language titles are managed on the Translation tab. */}
             </div>
 
             {/* Type & Schema Identification Card */}
