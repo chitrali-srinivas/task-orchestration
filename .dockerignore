@@ -1,0 +1,10 @@
+**/node_modules
+**/.next
+**/.git
+.claude
+src
+scripts
+supabase
+tests
+*.md
+!web/README.md
