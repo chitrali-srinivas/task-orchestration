@@ -33,3 +33,18 @@
 * { border-color: hsl(var(--border)); }
 body { background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 50; }
+
+/* Flow tree: ul/li with connector lines */
+.tree ul { display: flex; justify-content: center; padding-top: 22px; position: relative; margin: 0; list-style: none; }
+.tree > ul { padding-top: 0; }
+.tree li { display: flex; flex-direction: column; align-items: center; position: relative; padding: 22px 10px 0; }
+.tree > ul > li { padding-top: 0; }
+.tree li::before, .tree li::after { content: ""; position: absolute; top: 0; right: 50%; width: 50%; height: 22px; border-top: 2px solid hsl(var(--border)); }
+.tree li::after { right: auto; left: 50%; border-left: 2px solid hsl(var(--border)); }
+.tree li:only-child::before, .tree li:only-child::after { border-top: 0; }
+.tree li:first-child::before, .tree li:last-child::after { border: 0; }
+.tree li:last-child::before { border-right: 2px solid hsl(var(--border)); border-radius: 0 6px 0 0; }
+.tree li:first-child::after { border-radius: 6px 0 0 0; }
+.tree > ul > li::before, .tree > ul > li::after { display: none; }
+.tree ul ul::before { content: ""; position: absolute; top: 0; left: 50%; width: 0; height: 22px; border-left: 2px solid hsl(var(--border)); }
+.tree li.add::before, .tree li.add::after { border-top-style: dashed; border-left-style: dashed; }
