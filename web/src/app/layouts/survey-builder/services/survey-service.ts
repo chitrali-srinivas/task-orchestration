@@ -13,7 +13,26 @@ import { computeSurveyDiff, SurveyVersionDiff } from "../lib/version-diff-engine
 
 // In-memory state storage simulating persistent backend database
 // No seeded surveys: everything is created in the builder.
-let inMemorySurveys: SurveyModel[] = [];
+// Surveys are kept in the browser's localStorage so they survive reloads (until a real backend exists).
+const STORAGE_KEY = "mati.surveys";
+const loadStored = (): SurveyModel[] => {
+    if (typeof window === "undefined") return [];
+    try {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        return raw ? (JSON.parse(raw) as SurveyModel[]) : [];
+    } catch {
+        return [];
+    }
+};
+const persist = () => {
+    if (typeof window === "undefined") return;
+    try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemorySurveys));
+    } catch {
+        /* storage full or blocked: keep working in memory */
+    }
+};
+let inMemorySurveys: SurveyModel[] = loadStored();
 
 // Update AZ survey counts dynamically
 MOCK_AZS.forEach((az) => {
@@ -130,6 +149,7 @@ export const SurveyService = {
         };
 
         inMemorySurveys.push(newSurvey);
+        persist();
         inMemoryVersionSnapshots.set(newId, [
             {
                 version: 1,
@@ -150,9 +170,11 @@ export const SurveyService = {
      */
     async saveDraft(surveyId: string, updatedSurvey: SurveyModel): Promise<SurveyModel> {
         await new Promise((r) => setTimeout(r, 120));
-        const idx = inMemorySurveys.findIndex((s) => s.id === surveyId);
+        let idx = inMemorySurveys.findIndex((s) => s.id === surveyId);
         if (idx === -1) {
-            throw new Error(`Survey "${surveyId}" not found.`);
+            // The store can be reset underneath an open editor (dev hot reload); keep the user's draft.
+            inMemorySurveys.push(updatedSurvey);
+            idx = inMemorySurveys.length - 1;
         }
 
         const current = inMemorySurveys[idx];
@@ -166,6 +188,7 @@ export const SurveyService = {
         };
 
         inMemorySurveys[idx] = modified;
+        persist();
 
         // Log audit event
         const logs = inMemoryAuditLogs.get(surveyId) || [];
@@ -200,6 +223,7 @@ export const SurveyService = {
         };
 
         inMemorySurveys[idx] = publishedSurvey;
+        persist();
 
         // Save snapshot
         const snapshots = inMemoryVersionSnapshots.get(surveyId) || [];
@@ -240,6 +264,7 @@ export const SurveyService = {
         };
 
         inMemorySurveys[idx] = newDraft;
+        persist();
 
         // Ensure current published version snapshot is preserved in history
         const snapshots = inMemoryVersionSnapshots.get(surveyId) || [];
@@ -334,6 +359,7 @@ export const SurveyService = {
         };
 
         inMemorySurveys.push(newSurvey);
+        persist();
 
         // Initial snapshot for the new survey
         inMemoryVersionSnapshots.set(newId, [
@@ -394,6 +420,7 @@ export const SurveyService = {
         };
 
         inMemorySurveys[idx] = updated;
+        persist();
         return JSON.parse(JSON.stringify(updated));
     },
 
