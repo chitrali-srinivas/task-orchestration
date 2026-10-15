@@ -78,25 +78,33 @@ async function seasonPage(id) {
   const available = templates.filter((t) => !inFlow.has(t.id));
   let adding = null;   // from_template id ("" = Start) whose add form is open
 
+  // Edge label on the connector above a node.
   const condition = (a) => {
     const whenTask = a.start_date ? `on ${date(a.start_date)}` : a.delay_days ? `after ${a.delay_days} days` : "immediately";
-    return `<div class="my-2 text-xs text-muted-foreground">${a.from_template ? `when status of <b class="text-foreground">${esc(tpl(a.from_template)?.name)}</b> = <b class="text-foreground">${esc(a.on_status)}</b> → ` : "when the season starts → "}create task <b class="text-foreground">${whenTask}</b>${a.end_date ? `, ends <b class="text-foreground">${date(a.end_date)}</b>` : ""}</div>`;
+    return `<div class="mb-1 max-w-[220px] text-center text-[11px] leading-snug text-muted-foreground">${a.from_template ? `status = <b class="text-foreground">${esc(a.on_status)}</b>` : "season starts"}<br>create task <b class="text-foreground">${whenTask}</b>${a.end_date ? `<br>ends <b class="text-foreground">${date(a.end_date)}</b>` : ""}</div>`;
   };
   const addForm = (from) => `
-    <form class="${ui.card} my-2 max-w-xl space-y-3 p-4" data-add="${from}">
+    <form class="${ui.card} w-[300px] space-y-3 p-4 text-left" data-add="${from}">
       ${field("Survey", `<input list="surveys" name="survey" placeholder="Search and pick a survey" required class="${ui.input}">`)}
       <datalist id="surveys">${available.map((t) => `<option value="${esc(t.name)}">`).join("")}</datalist>
       ${from ? field(`When status of ${esc(tpl(from).name)} =`, `<select name="on_status" class="${ui.select}">${opt(tpl(from).statuses.map((s) => [s, s]))}</select>`) : ""}
-      ${field("Create task", `<div class="flex flex-wrap gap-2"><select name="mode" class="${ui.select} w-40"><option value="now">Immediately</option><option value="days">After N days</option><option value="date">On date</option></select><input name="days" type="number" min="1" placeholder="days" class="${ui.input} w-24"><input name="start_date" type="date" class="${ui.input} w-44"></div>`)}
-      ${field("Ends on (optional)", `<input name="end_date" type="date" class="${ui.input} w-44">`)}
+      ${field("Create task", `<div class="flex flex-wrap gap-2"><select name="mode" class="${ui.select} w-full"><option value="now">Immediately</option><option value="days">After N days</option><option value="date">On date</option></select><input name="days" type="number" min="1" placeholder="days" class="${ui.input} w-24"><input name="start_date" type="date" class="${ui.input} w-40"></div>`)}
+      ${field("Ends on (optional)", `<input name="end_date" type="date" class="${ui.input} w-40">`)}
       <div class="flex gap-2 pt-1"><button class="${ui.btn}">Add</button><button type="button" data-cancel class="${ui.outline}">Cancel</button></div>
     </form>`;
-  const branch = (from) => arrows.filter((a) => (a.from_template ?? "") === from).map((a) => `
-    <div class="ml-5 border-l-2 pl-5">${condition(a)}
-      <span class="inline-flex items-center gap-2 rounded-md border bg-card px-3 py-1.5 font-medium shadow-sm">${esc(tpl(a.to_template)?.name)}<button data-del="${a.id}" class="text-xs text-muted-foreground hover:text-destructive" title="Remove">✕</button></span>
-      ${branch(a.to_template)}
-      ${adding === a.to_template ? addForm(a.to_template) : `<div class="my-2"><button data-plus="${a.to_template}" class="${ui.link}">+ Next survey after ${esc(tpl(a.to_template)?.name)}</button></div>`}
-    </div>`).join("");
+  // One tree node per arrow; its children are the arrows that start from it. Rendered as a CSS tree (ul/li with connector lines).
+  const node = (a) => `
+    <li>${condition(a)}
+      <div class="inline-flex items-center gap-2 rounded-md border bg-card px-3 py-1.5 text-sm font-medium shadow-sm">${esc(tpl(a.to_template)?.name)}<button data-del="${a.id}" class="text-xs text-muted-foreground hover:text-destructive" title="Remove">✕</button></div>
+      ${children(a.to_template)}
+    </li>`;
+  const children = (from) => `<ul>${arrows.filter((a) => (a.from_template ?? "") === from).map(node).join("")}
+    <li class="add">${adding === from ? addForm(from) : `<button data-plus="${from}" class="rounded-md border border-dashed px-2.5 py-1 text-xs text-muted-foreground hover:border-foreground hover:text-foreground">+ ${from ? "Next survey" : "Survey when the season starts"}</button>`}</li></ul>`;
+  const tree = () => `
+    <div class="tree overflow-x-auto pb-2"><ul><li>
+      <span class="inline-flex items-center rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">Start</span>
+      ${children("")}
+    </li></ul></div>`;
 
   const draw = () => {
     main.innerHTML = `
@@ -109,11 +117,7 @@ async function seasonPage(id) {
         ${field("Base", `<input id="base" value="${esc(season.base ?? "")}" class="${ui.input}">`)}
         ${field("AZ name", `<input id="az" value="${esc(season.az_name ?? "")}" class="${ui.input}">`)}
         <button id="save" class="${ui.outline}">Save</button></div>`)}
-      ${card("Flow", `
-        <span class="inline-flex items-center rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground">Start</span>
-        ${branch("")}
-        <div class="ml-5 border-l-2 pl-5">${adding === "" ? addForm("") : `<div class="my-2"><button data-plus="" class="${ui.link}">+ Survey when the season starts</button></div>`}</div>`,
-        "Top-down: pick the survey, the status of the previous survey that triggers it, and when its task is created.")}
+      ${card("Flow", tree(), "Top-down: each survey hangs under the survey that triggers it. Pick the survey, the status that triggers it, and when its task is created.")}
       ${card("Survey Responses", `
         <table class="${ui.table}"><thead><tr class="border-b"><th class="${ui.th}">Task</th><th class="${ui.th}">Survey</th><th class="${ui.th}">Farmer</th><th class="${ui.th}">Status</th><th class="${ui.th}">Start</th><th class="${ui.th}">End</th><th class="${ui.th}">v</th></tr></thead>
         <tbody>${tasks.map((t) => `<tr class="${ui.tr} cursor-pointer" data-task="${t.task_id}"><td class="${ui.td}">T${t.task_no}</td><td class="${ui.td} font-medium">${esc(t.task_type)}</td><td class="${ui.td}">${esc(t.farmer.name)}</td><td class="${ui.td}"><span class="${ui.badgeSec}">${esc(t.status)}</span></td><td class="${ui.td}">${date(t.planned_start_date)}</td><td class="${ui.td}">${t.planned_end_date ? date(t.planned_end_date) : "—"}</td><td class="${ui.td}">${t.response_version}</td></tr>`).join("")}</tbody></table>

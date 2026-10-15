@@ -54,8 +54,11 @@ function renderList() {
 
 // ───────── One control per question type (types from the survey builder) ─────────
 const EMOJIS = ["😠", "🙁", "😐", "🙂", "😄"];
-function control(f, v, on) {
-  const dis = on ? "" : "disabled", req = f.required ? "required" : "", n = esc(f.key);
+const label = (f, num) => `<label class="${ui.label}"><span class="mr-1 text-muted-foreground">${num}.</span>${esc(f.label)}${f.required ? ' <span class="text-destructive">*</span>' : ""}</label>`;
+
+// name = form field name (prefixed inside repeater instances), v = current value, on = editable
+function control(f, v, on, name = f.key) {
+  const dis = on ? "" : "disabled", req = f.required ? "required" : "", n = esc(name);
   const choices = (type, opts, checked) => `<div class="space-y-2">${opts.map((o) => `<label class="flex items-center gap-2 rounded-md border px-3 py-2"><input type="${type}" name="${n}" value="${esc(o)}" ${checked(o) ? "checked" : ""} ${dis} ${type === "radio" ? req : ""} class="h-4 w-4 accent-primary"><span>${esc(o)}</span></label>`).join("")}</div>`;
   const text = (type, extra = "") => `<input type="${type}" name="${n}" value="${esc(v ?? f.default ?? "")}" ${dis} ${req} ${extra} class="${ui.input}">`;
   const pair = (a, b, type = "text", ph = ["", ""]) => `<div class="grid grid-cols-2 gap-2"><input type="${type}" name="${n}.${a}" value="${esc(v?.[a] ?? "")}" placeholder="${ph[0]}" ${dis} ${req} class="${ui.input}"><input type="${type}" name="${n}.${b}" value="${esc(v?.[b] ?? "")}" placeholder="${ph[1]}" ${dis} ${req} class="${ui.input}"></div>`;
@@ -77,49 +80,82 @@ function control(f, v, on) {
     case "Map":               return pair("lat", "lng", "number", ["Latitude", "Longitude"]) + (on ? `<button type="button" data-gps="${n}" class="${ui.sm} mt-2">Use my location</button>` : "");
     case "PolygonBoundary":   return `<textarea name="${n}" rows="3" placeholder="lat,lng per line" ${dis} ${req} class="${ui.input} h-auto font-mono text-xs">${esc(v ?? "")}</textarea>`;
     case "QRCode":            return text("text", 'placeholder="Scan or type the code"');
-    case "Repeater_QT":       return `<p class="text-xs text-muted-foreground">Repeater groups are not supported on this phone build yet.</p>`;
+    case "Repeater_QT":       return repeater(f, v, on, name);
     default:                  return text("text", `${f.minLength ? `minlength="${f.minLength}"` : ""} ${f.maxLength ? `maxlength="${f.maxLength}"` : ""} ${f.regex ? `pattern="${esc(f.regex)}"` : ""}`);
   }
 }
 
+// Repeater: the count comes from this question (self), another Number question, or is fixed.
+// Then the block's questions are asked once per instance: "Plot #1", "Plot #2", …
+function repeatCount(f, v, all) {
+  const r = f.repeater;
+  if (r.countSource === "fixed") return r.fixedCount || 1;
+  if (r.countSource === "question") return Number(all?.[r.countKey]) || 0;
+  return Number(v?.count) || 0;
+}
+function repeater(f, v, on, name) {
+  const r = f.repeater, count = Math.min(repeatCount(f, v, open._answers), 50), items = v?.items ?? [];
+  const tag = (i) => (r.itemLabel || "Plot #{index}").replace("#{index}", i + 1);
+  return `
+    ${r.countSource === "self" ? `<input type="number" min="0" max="50" step="1" name="${esc(name)}.count" value="${esc(v?.count ?? "")}" data-count placeholder="How many?" ${on ? "" : "disabled"} ${f.required ? "required" : ""} class="${ui.input}">`
+      : r.countSource === "question" ? `<p class="text-[11px] text-muted-foreground">${count} ${count === 1 ? "entry" : "entries"} (from your answer above)</p>` : ""}
+    ${Array.from({ length: count }, (_, i) => `
+      <div class="mt-3 rounded-lg border">
+        <div class="border-b bg-muted/60 px-3 py-1.5 text-xs font-semibold">${esc(tag(i))}</div>
+        <div class="space-y-4 p-3">${r.children.map((c, j) => `<div class="space-y-1.5">${label(c, `${i + 1}.${j + 1}`)}${control(c, items[i]?.[c.key], on, `${name}[${i}].${c.key}`)}</div>`).join("")}</div>
+      </div>`).join("")}`;
+}
+
 // Read the answers back out of the form, per type.
+function readAnswer(fd, f, name, all) {
+  switch (f.type) {
+    case "Checkbox":        return fd.getAll(name);
+    case "Rank":            return Object.fromEntries((f.options ?? []).map((o) => [o, Number(fd.get(`${name}.${o}`)) || null]));
+    case "DateRange":       return { from: fd.get(`${name}.from`) || null, to: fd.get(`${name}.to`) || null };
+    case "Map":             return { lat: Number(fd.get(`${name}.lat`)) || null, lng: Number(fd.get(`${name}.lng`)) || null };
+    case "Number": case "Rating": case "Emoji": { const x = fd.get(name); return x === "" || x == null ? null : Number(x); }
+    case "Picture Input": case "Audio": case "Video": case "Document": { const file = fd.get(name); return file?.name || null; }
+    case "Repeater_QT": {
+      const self = f.repeater.countSource === "self" ? { count: Number(fd.get(`${name}.count`)) || 0 } : {};
+      const count = f.repeater.countSource === "self" ? self.count : repeatCount(f, null, all);
+      return { ...self, items: Array.from({ length: Math.min(count, 50) }, (_, i) => Object.fromEntries(f.repeater.children.map((c) => [c.key, readAnswer(fd, c, `${name}[${i}].${c.key}`, all)]))) };
+    }
+    default:                return fd.get(name) ?? null;
+  }
+}
 function answers(form, fields) {
   const fd = new FormData(form), out = {};
-  for (const f of fields) {
-    const k = f.key;
-    switch (f.type) {
-      case "Checkbox":        out[k] = fd.getAll(k); break;
-      case "Rank":            out[k] = Object.fromEntries((f.options ?? []).map((o) => [o, Number(fd.get(`${k}.${o}`)) || null])); break;
-      case "DateRange":       out[k] = { from: fd.get(`${k}.from`) || null, to: fd.get(`${k}.to`) || null }; break;
-      case "Map":             out[k] = { lat: Number(fd.get(`${k}.lat`)) || null, lng: Number(fd.get(`${k}.lng`)) || null }; break;
-      case "Number": case "Rating": case "Emoji": out[k] = fd.get(k) === "" || fd.get(k) == null ? null : Number(fd.get(k)); break;
-      case "Picture Input": case "Audio": case "Video": case "Document": { const file = fd.get(k); out[k] = file?.name || open.survey_response?.[k] || null; break; }
-      case "Repeater_QT":     break;
-      default:                out[k] = fd.get(k) ?? null;
-    }
-  }
+  for (const f of fields) if (f.type !== "Repeater_QT") out[f.key] = readAnswer(fd, f, f.key, out);
+  for (const f of fields) if (f.type === "Repeater_QT") out[f.key] = readAnswer(fd, f, f.key, out);
   return out;
 }
 
-function renderForm() {
-  const t = open, fields = templates[t.survey_template_id].questions, v = t.survey_response ?? {}, on = isPending(t);
+function renderForm(values) {
+  const t = open, fields = templates[t.survey_template_id].questions, v = values ?? t.survey_response ?? {}, on = isPending(t);
+  open._answers = v;
   app.querySelector("#body").innerHTML = `
     <div class="flex-1 px-4 pb-4">
       <div class="flex items-center gap-2 py-2"><button id="back" class="${ui.icon}">←</button><h1 class="flex-1 text-lg font-semibold">${esc(t.task_type)}</h1><span class="${ui.badgeSec}">${esc(t.status)}</span></div>
       <p class="mb-3 text-xs text-muted-foreground">T${t.task_no} · Farmer: ${esc(t.farmer.name)} · ${date(t.planned_start_date)} – ${t.planned_end_date ? date(t.planned_end_date) : "no end"}</p>
       <form id="form" class="space-y-5">
-        ${fields.map((f, i) => `<div class="space-y-1.5"><label class="${ui.label}"><span class="mr-1 text-muted-foreground">${i + 1}.</span>${esc(f.label)}${f.required ? ' <span class="text-destructive">*</span>' : ""}</label>${control(f, v[f.key], on)}${f.help ? `<p class="text-xs text-muted-foreground">${esc(f.help)}</p>` : ""}</div>`).join("")}
-        ${on ? field("Remarks", `<input name="__remarks" class="${ui.input}">`) + `<button class="${ui.btn} w-full">Submit</button>` : ""}
+        ${fields.map((f, i) => `<div class="space-y-1.5">${label(f, i + 1)}${control(f, v[f.key], on)}${f.help ? `<p class="text-xs text-muted-foreground">${esc(f.help)}</p>` : ""}</div>`).join("")}
+        ${on ? field("Remarks", `<input name="__remarks" value="${esc(v.__remarks ?? "")}" class="${ui.input}">`) + `<button class="${ui.btn} w-full">Submit</button>` : ""}
       </form>
     </div>`;
+  const form = app.querySelector("#form");
   app.querySelector("#back").onclick = () => { open = null; render(); };
   app.querySelectorAll("[data-gps]").forEach((b) => b.onclick = () => navigator.geolocation?.getCurrentPosition((p) => {
     app.querySelector(`[name="${b.dataset.gps}.lat"]`).value = p.coords.latitude.toFixed(6);
     app.querySelector(`[name="${b.dataset.gps}.lng"]`).value = p.coords.longitude.toFixed(6);
   }, () => toast("Location not available", true)));
-  app.querySelector("#form").onsubmit = (e) => { e.preventDefault(); run(async () => {
-    const data = answers(e.target, fields);
-    const remarks = new FormData(e.target).get("__remarks");
+  // A change to a repeat count (self count, or a Number question another repeater depends on) re-renders with the answers kept.
+  const countKeys = new Set(fields.filter((f) => f.repeater?.countSource === "question").map((f) => f.repeater.countKey));
+  form.querySelectorAll("[data-count], input[type=number]").forEach((el) => {
+    if (el.hasAttribute("data-count") || countKeys.has(el.name)) el.onchange = () => renderForm({ ...answers(form, fields), __remarks: form.__remarks?.value });
+  });
+  form.onsubmit = (e) => { e.preventDefault(); run(async () => {
+    const data = answers(form, fields);
+    const remarks = new FormData(form).get("__remarks");
     await q(db.rpc("submit_response", { p_task: t.task_id, p_response: data, p_by: who(), p_remarks: remarks || null }));
     toast("Submitted"); open = null; tab = "completed"; load();
   }); };
