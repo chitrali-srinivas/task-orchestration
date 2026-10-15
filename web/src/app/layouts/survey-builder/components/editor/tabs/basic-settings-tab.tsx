@@ -91,8 +91,8 @@ export function BasicSettingsTab({
                 {/* Regional-language titles are managed on the Translation tab. */}
 
                 {/* Required toggle */}
-                <div className="flex items-center justify-between">
-                    <Label htmlFor="q-required" className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                <div className="flex items-center gap-3">
+                    <Label htmlFor="q-required" className="w-20 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
                         Required
                     </Label>
                     <Switch
@@ -112,23 +112,10 @@ export function BasicSettingsTab({
                 </div>
 
                 {/* Validation (regex) toggle: switching it on opens the pattern dialog */}
-                <div className="flex items-center justify-between">
-                    <div className="min-w-0">
-                        <Label htmlFor="q-validation" className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                            Validation
-                        </Label>
-                        {hasRegex && (
-                            <button
-                                type="button"
-                                disabled={isPublished}
-                                onClick={() => setRegexDialogOpen(true)}
-                                className="mt-0.5 block max-w-full truncate font-mono text-[11px] text-zinc-500 underline-offset-2 hover:text-zinc-900 hover:underline dark:hover:text-zinc-100"
-                                title="Edit pattern"
-                            >
-                                {question.validation.regexPattern}
-                            </button>
-                        )}
-                    </div>
+                <div className="flex items-center gap-3">
+                    <Label htmlFor="q-validation" className="w-20 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                        Validation
+                    </Label>
                     <Switch
                         id="q-validation"
                         checked={hasRegex}
@@ -151,6 +138,17 @@ export function BasicSettingsTab({
                             }
                         }}
                     />
+                    {hasRegex && (
+                        <button
+                            type="button"
+                            disabled={isPublished}
+                            onClick={() => setRegexDialogOpen(true)}
+                            className="min-w-0 truncate font-mono text-[11px] text-zinc-500 underline-offset-2 hover:text-zinc-900 hover:underline dark:hover:text-zinc-100"
+                            title="Edit pattern"
+                        >
+                            {question.validation.regexPattern}
+                        </button>
+                    )}
                 </div>
                 <RegexValidationDialog
                     open={regexDialogOpen}
