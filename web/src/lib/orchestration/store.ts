@@ -29,7 +29,7 @@ function write(key: string, value: unknown) {
     }
 }
 
-export const loadTasks = () => read<Task[]>(TASKS_KEY, []);
+export const loadTasks = () => dedupeIds(read<Task[]>(TASKS_KEY, []));
 export const loadFarmers = () => read<Farmer[]>(FARMERS_KEY, []);
 export const saveTasks = (t: Task[]) => write(TASKS_KEY, t);
 export const saveFarmers = (f: Farmer[]) => write(FARMERS_KEY, f);
@@ -42,7 +42,26 @@ export const saveToday = (today: string) => write(SIM_KEY, { today });
 
 const nowIso = () => new Date().toISOString();
 const nextNo = (tasks: Task[]) => tasks.reduce((m, t) => Math.max(m, t.taskNo), 0) + 1;
-const newIds = (prefix: string) => (i: number) => `${prefix}_${Date.now()}_${i}`;
+// Ids must stay unique even when several tasks are created in the same millisecond
+// (registration creates the root task and its follow-ons in one go).
+let seq = 0;
+const newIds = (prefix: string) => (i: number) => `${prefix}_${Date.now()}_${(seq++).toString(36)}${i}`;
+
+/** Repair tasks saved by an earlier build whose ids collided: later duplicates get a unique id. */
+function dedupeIds(tasks: Task[]): Task[] {
+    const seen = new Set<string>();
+    let changed = false;
+    const out = tasks.map((t) => {
+        if (!seen.has(t.id)) {
+            seen.add(t.id);
+            return t;
+        }
+        changed = true;
+        return { ...t, id: `${t.id}_${t.taskNo}` };
+    });
+    if (changed) saveTasks(out);
+    return out;
+}
 
 /** Workflows the phone can run: active ones first, then drafts (the starting survey is always open). */
 export const phoneWorkflows = () =>
