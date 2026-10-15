@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { QuestionModel, SurveyTranslationResource } from "../../../types/survey-schema";
-import { getMasterSetById } from "../../../lib/master-data-registry";
+import { MASTER_DEFINITIONS, getMasterSetById } from "../../../lib/master-data-registry";
 import { TranslationService } from "../../../services/translation-service";
 
 interface PreviewChoiceProps {
@@ -110,9 +110,9 @@ function MasterDataTriggerCard({
     locale: string;
     onOpenMasterCatalog?: (question: QuestionModel) => void;
 }) {
-    const masterId = question.masterDataConfig?.masterSetId || "trucks";
+    const masterId = question.masterDataConfig?.masterSetId || MASTER_DEFINITIONS[0].id;
     const masterDef = getMasterSetById(masterId);
-    const displayKey = question.masterDataConfig?.displayField || masterDef?.displayFieldKey || "vehicleNumber";
+    const displayKey = question.masterDataConfig?.displayField || masterDef?.displayFieldKey || MASTER_DEFINITIONS[0].displayFieldKey;
     const isMultiSelect = question.type === "Checkbox" || Boolean(question.masterDataConfig?.allowMultiSelect);
 
     const secondaryFields = React.useMemo(() => {

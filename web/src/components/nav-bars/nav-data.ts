@@ -29,7 +29,8 @@ import {
     ShieldPlus,
     CalendarCheck,
     LayoutPanelLeft,
-    Workflow
+    Workflow,
+    Database
 } from "lucide-react"
 
 export type UserRole = "Verifier" | "Admin" | "HQ Verifier" | "HQ Admin";
@@ -257,6 +258,12 @@ export const data = {
             title: "Survey Workflow",
             url: "/layouts/season-management",
             icon: Workflow,
+            roles: ["HQ Admin"] as UserRole[],
+        },
+        {
+            title: "Masters",
+            url: "/layouts/masters",
+            icon: Database,
             roles: ["HQ Admin"] as UserRole[],
         },
         {

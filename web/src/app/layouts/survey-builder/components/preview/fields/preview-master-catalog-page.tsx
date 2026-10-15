@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { QuestionModel } from "../../../types/survey-schema";
-import { getMasterSetById, searchMasterRecords } from "../../../lib/master-data-registry";
+import { MASTER_DEFINITIONS, getMasterSetById, searchMasterRecords } from "../../../lib/master-data-registry";
 
 interface PreviewMasterCatalogPageProps {
     question: QuestionModel;
@@ -31,9 +31,9 @@ export function PreviewMasterCatalogPage({
     onBack,
     locale,
 }: PreviewMasterCatalogPageProps) {
-    const masterId = question.masterDataConfig?.masterSetId || "trucks";
+    const masterId = question.masterDataConfig?.masterSetId || MASTER_DEFINITIONS[0].id;
     const masterDef = getMasterSetById(masterId);
-    const displayKey = question.masterDataConfig?.displayField || masterDef?.displayFieldKey || "vehicleNumber";
+    const displayKey = question.masterDataConfig?.displayField || masterDef?.displayFieldKey || MASTER_DEFINITIONS[0].displayFieldKey;
 
     // Determine if multi-select mode is enabled
     const isMultiSelect = question.type === "Checkbox" || Boolean(question.masterDataConfig?.allowMultiSelect);
