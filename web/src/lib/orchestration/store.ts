@@ -1,44 +1,28 @@
 /**
- * Orchestration store: farmers + tasks in localStorage, and the actions that run the engine.
- * The engine (engine.ts) is pure; this file is the only place that reads the clock and storage.
- * Swapping this for Supabase later leaves the engine untouched.
+ * Orchestration store: farmers + tasks, and the actions that run the engine.
+ * The engine (engine.ts) is pure; this file is the only place that reads the clock. Storage
+ * (Supabase or localStorage) is behind lib/backend.
  */
 
 import { Workflow, loadWorkflows } from "@/app/layouts/survey-workflow/workflow-store";
 import { Farmer, QuestionRef, STATUS, Task, expireTasks, farmerFromResponse, nextTasks, rootTasks } from "./engine";
 
-const TASKS_KEY = "mati.tasks";
-const FARMERS_KEY = "mati.farmers";
-const SIM_KEY = "mati.sim";
+import * as backend from "@/lib/backend";
 
-function read<T>(key: string, fallback: T): T {
-    if (typeof window === "undefined") return fallback;
-    try {
-        const raw = window.localStorage.getItem(key);
-        return raw ? (JSON.parse(raw) as T) : fallback;
-    } catch {
-        return fallback;
-    }
-}
-function write(key: string, value: unknown) {
-    if (typeof window === "undefined") return;
-    try {
-        window.localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-        /* ignore */
-    }
-}
-
-export const loadTasks = () => dedupeIds(read<Task[]>(TASKS_KEY, []));
-export const loadFarmers = () => read<Farmer[]>(FARMERS_KEY, []);
-export const saveTasks = (t: Task[]) => write(TASKS_KEY, t);
-export const saveFarmers = (f: Farmer[]) => write(FARMERS_KEY, f);
+export const loadTasks = () => dedupeIds(backend.get<Task>("tasks"));
+export const loadFarmers = () => backend.get<Farmer>("farmers");
+export const saveTasks = (t: Task[]) => backend.set("tasks", t);
+export const saveFarmers = (f: Farmer[]) => backend.set("farmers", f);
 
 /** Simulated "today" (YYYY-MM-DD) shared by the phone and the task summary, so time can be moved by hand. */
 export function loadToday(): string {
-    return read<{ today?: string }>(SIM_KEY, {}).today || new Date().toISOString().slice(0, 10);
+    const row = backend.get<{ id: string; today?: string }>("settings").find((r) => r.id === "today");
+    return row?.today || new Date().toISOString().slice(0, 10);
 }
-export const saveToday = (today: string) => write(SIM_KEY, { today });
+export const saveToday = (today: string) => backend.set("settings", [{ id: "today", today }]);
+
+/** Pages call this before their first read; resolves immediately in local (demo) mode. */
+export const ready = backend.ready;
 
 const nowIso = () => new Date().toISOString();
 const nextNo = (tasks: Task[]) => tasks.reduce((m, t) => Math.max(m, t.taskNo), 0) + 1;

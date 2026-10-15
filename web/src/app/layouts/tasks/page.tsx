@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SurveyService } from "../survey-builder/services/survey-service";
 import { SurveyModel } from "../survey-builder/types/survey-schema";
 import { Farmer, STATUS, Task } from "@/lib/orchestration/engine";
-import { changeStatus, loadFarmers, loadToday, refreshTasks, resetSimulation, saveToday } from "@/lib/orchestration/store";
+import { changeStatus, loadFarmers, loadToday, refreshTasks, resetSimulation, saveToday, ready } from "@/lib/orchestration/store";
 
 /** HQ view of every task the workflow created: id, survey template, farmer, status, dates. */
 export default function TasksPage() {
@@ -44,11 +44,13 @@ function TaskSummary() {
     const [filter, setFilter] = useState<string>("all");
 
     useEffect(() => {
-        const t = loadToday();
-        setToday(t);
-        setTasks(refreshTasks(t));
-        setFarmers(loadFarmers());
-        SurveyService.getAllSurveys().then(setSurveys);
+        ready().then(() => {
+            const t = loadToday();
+            setToday(t);
+            setTasks(refreshTasks(t));
+            setFarmers(loadFarmers());
+            SurveyService.getAllSurveys().then(setSurveys);
+        });
     }, []);
 
     const changeToday = (t: string) => {

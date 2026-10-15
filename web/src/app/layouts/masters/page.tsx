@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Database, Pencil, Plus, Trash2 } from "lucide-react";
 import { NavBarType4 } from "@/components/nav-bars/NavBarType4";
+import { ready } from "@/lib/backend";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,9 +55,11 @@ function MastersEditor() {
     // All masters' records, loaded once on the client (localStorage is not available during SSR).
     const [records, setRecords] = useState<Record<string, MasterRecord[]>>({});
     useEffect(() => {
-        const init: Record<string, MasterRecord[]> = {};
-        MASTER_DEFINITIONS.forEach((d) => (init[d.id] = loadMasterRecords(d.id)));
-        setRecords(init);
+        ready().then(() => {
+            const init: Record<string, MasterRecord[]> = {};
+            MASTER_DEFINITIONS.forEach((d) => (init[d.id] = loadMasterRecords(d.id)));
+            setRecords(init);
+        });
     }, []);
 
     const update = (setId: string, next: MasterRecord[]) => {

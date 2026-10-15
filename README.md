@@ -15,7 +15,18 @@ cd web && npm install && npx next dev -p 3100
 | `/phone` | **Phone simulator** — the surveyor app: register a farmer (fills the first survey), do pending tasks |
 | `/layouts/masters` | **Masters** — Supplier info and Fleet master records used by "Master data" questions |
 
-Storage is the browser's localStorage for now (`mati.surveys`, `mati.workflows`, `mati.masters`, `mati.farmers`, `mati.tasks`, `mati.sim`). Swapping it for Supabase only touches `web/src/lib/orchestration/store.ts` and the per-page loaders.
+## Storage: browser demo or Supabase
+
+All stores go through `web/src/lib/backend` (a write-through cache). The mode is chosen by environment:
+
+| Mode | When | Where data lives |
+|---|---|---|
+| **local** (default) | no Supabase variables | the browser's localStorage, per browser (`mati.surveys`, `mati.workflows`, `mati.masters`, `mati.farmers`, `mati.tasks`, `mati.sim`) |
+| **supabase** | `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` set (see `web/.env.local.example`) | Postgres tables `wf_survey_template`, `wf_master_record`, `wf_workflow`, `wf_farmer`, `wf_task`, `wf_setting` |
+
+To use Supabase: run `supabase/migrations/20261015120000_web_backend.sql` on the project (SQL editor, or `supabase db push`), copy `web/.env.local.example` to `web/.env.local`, restart. For Cloud Run pass the two values as build args (`--build-arg`) or substitutions. Pages call `ready()` once, which loads every table into memory; every save upserts the changed rows and deletes removed ones in the background. The orchestration engine still runs in the browser that triggers the status change; moving it server-side (a Postgres trigger or an API route) is the next step. Access is "demo all" for the anon key until login exists.
+
+`node scripts/test-web-backend.mjs` applies the migration to an in-process Postgres and round-trips a row per table.
 
 ## Deploy (Cloud Run)
 

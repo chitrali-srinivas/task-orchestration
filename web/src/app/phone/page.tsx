@@ -12,7 +12,7 @@ import { SurveyModel } from "@/app/layouts/survey-builder/types/survey-schema";
 import { PreviewAllQuestions } from "@/app/layouts/survey-builder/components/preview/preview-runtime";
 import { Workflow } from "@/app/layouts/survey-workflow/workflow-store";
 import { Farmer, STATUS, Task, isPendingOnApp } from "@/lib/orchestration/engine";
-import { phoneWorkflows, loadFarmers, loadToday, refreshTasks, registerFarmer, saveToday, submitTask } from "@/lib/orchestration/store";
+import { phoneWorkflows, loadFarmers, loadToday, refreshTasks, registerFarmer, saveToday, submitTask, ready } from "@/lib/orchestration/store";
 
 /**
  * Surveyor phone (simulation). Registering a farmer fills the workflow's first survey; the
@@ -28,14 +28,16 @@ export default function PhonePage() {
     const [farmers, setFarmers] = useState<Farmer[]>([]);
 
     useEffect(() => {
-        const t = loadToday();
-        setToday(t);
-        const wfs = phoneWorkflows();
-        setWorkflows(wfs);
-        setWorkflowId(wfs[0]?.id || "");
-        setTasks(refreshTasks(t));
-        setFarmers(loadFarmers());
-        SurveyService.getAllSurveys().then(setSurveys);
+        ready().then(() => {
+            const t = loadToday();
+            setToday(t);
+            const wfs = phoneWorkflows();
+            setWorkflows(wfs);
+            setWorkflowId(wfs[0]?.id || "");
+            setTasks(refreshTasks(t));
+            setFarmers(loadFarmers());
+            SurveyService.getAllSurveys().then(setSurveys);
+        });
     }, []);
 
     const changeToday = (t: string) => {

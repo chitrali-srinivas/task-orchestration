@@ -1,3 +1,4 @@
+import * as backend from "@/lib/backend";
 import {
     AuditLogEntry,
     LegacyBackendSurveyJSON,
@@ -13,26 +14,14 @@ import { computeSurveyDiff, SurveyVersionDiff } from "../lib/version-diff-engine
 
 // In-memory state storage simulating persistent backend database
 // No seeded surveys: everything is created in the builder.
-// Surveys are kept in the browser's localStorage so they survive reloads (until a real backend exists).
-const STORAGE_KEY = "mati.surveys";
-const loadStored = (): SurveyModel[] => {
-    if (typeof window === "undefined") return [];
-    try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
-        return raw ? (JSON.parse(raw) as SurveyModel[]) : [];
-    } catch {
-        return [];
-    }
-};
-const persist = () => {
-    if (typeof window === "undefined") return;
-    try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(inMemorySurveys));
-    } catch {
-        /* storage full or blocked: keep working in memory */
-    }
-};
+// Surveys are stored through lib/backend (Supabase, or localStorage in demo mode).
+const loadStored = (): SurveyModel[] => backend.get<SurveyModel>("surveys");
+const persist = () => backend.set("surveys", inMemorySurveys);
 let inMemorySurveys: SurveyModel[] = loadStored();
+// In Supabase mode the data arrives after the first load; pick it up when it does.
+backend.onReady(() => {
+    inMemorySurveys = loadStored();
+});
 
 // Update AZ survey counts dynamically
 MOCK_AZS.forEach((az) => {
@@ -77,7 +66,7 @@ export const SurveyService = {
      * Retrieves all surveys filtered by AZ
      */
     async getAllSurveys(): Promise<SurveyModel[]> {
-        await new Promise((r) => setTimeout(r, 80));
+        await backend.ready();
         return [...inMemorySurveys];
     },
 

@@ -4,6 +4,7 @@ import "./tree.css";
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ClipboardList, Flag, Plus, Trash2, Workflow as WorkflowIcon } from "lucide-react";
 import { NavBarType4 } from "@/components/nav-bars/NavBarType4";
+import { ready } from "@/lib/backend";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -65,8 +66,10 @@ function Workflows() {
     const [creating, setCreating] = useState(false);
 
     useEffect(() => {
-        setWorkflows(loadWorkflows());
-        SurveyService.getAllSurveys().then(setSurveys);
+        ready().then(() => {
+            setWorkflows(loadWorkflows());
+            SurveyService.getAllSurveys().then(setSurveys);
+        });
     }, []);
 
     const persist = (next: Workflow[]) => {

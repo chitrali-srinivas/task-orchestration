@@ -2,9 +2,11 @@
  * Survey Workflow: the order in which surveys run for a season, and the condition on the
  * previous survey's status that makes the next one visible.
  *
- * Kept in localStorage (`mati.workflows`) like surveys and masters. Later each step becomes
- * a task per farmer when the workflow's condition is met.
+ * Stored through lib/backend (Supabase or localStorage). Each step becomes a task per farmer
+ * when the workflow's condition is met.
  */
+
+import * as backend from "@/lib/backend";
 
 /**
  * When the next task is created once the condition is met:
@@ -49,25 +51,12 @@ export interface Workflow {
     updatedAt: string;
 }
 
-const STORAGE_KEY = "mati.workflows";
-
 export function loadWorkflows(): Workflow[] {
-    if (typeof window === "undefined") return [];
-    try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
-        return raw ? (JSON.parse(raw) as Workflow[]) : [];
-    } catch {
-        return [];
-    }
+    return backend.get<Workflow>("workflows");
 }
 
 export function saveWorkflows(list: Workflow[]) {
-    if (typeof window === "undefined") return;
-    try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-    } catch {
-        /* ignore */
-    }
+    backend.set("workflows", list);
 }
 
 export function newWorkflow(name: string, country: string): Workflow {

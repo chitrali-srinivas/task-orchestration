@@ -2,10 +2,12 @@
  * Master Data Registry
  *
  * Two masters are defined here (Supplier info, Fleet master). Their records are NOT
- * hard-coded: they are entered on the Masters page (/layouts/masters) and kept in
- * localStorage under `mati.masters`, so whatever is added there is what the survey
- * builder's master-data picker and the phone preview show.
+ * hard-coded: they are entered on the Masters page (/layouts/masters) and stored through
+ * lib/backend, so whatever is added there is what the survey builder's master-data picker
+ * and the phone preview show.
  */
+
+import * as backend from "@/lib/backend";
 
 export type MasterRecord = Record<string, any> & { id: string };
 
@@ -32,7 +34,6 @@ export interface MasterSetDefinition {
     sampleRecords: MasterRecord[];
 }
 
-export const MASTERS_STORAGE_KEY = "mati.masters";
 
 /** Static definitions (no records). Records are merged in by getMasterSets(). */
 export const MASTER_DEFINITIONS: Omit<MasterSetDefinition, "sampleRecords">[] = [
@@ -69,42 +70,23 @@ export const MASTER_DEFINITIONS: Omit<MasterSetDefinition, "sampleRecords">[] = 
 /** Kept for backwards compatibility: definitions with whatever records are stored right now. */
 export const MASTER_SETS: MasterSetDefinition[] = MASTER_DEFINITIONS.map((d) => ({ ...d, sampleRecords: [] }));
 
-type MastersStore = Record<string, MasterRecord[]>;
-
-function readStore(): MastersStore {
-    if (typeof window === "undefined") return {};
-    try {
-        const raw = window.localStorage.getItem(MASTERS_STORAGE_KEY);
-        return raw ? (JSON.parse(raw) as MastersStore) : {};
-    } catch {
-        return {};
-    }
-}
-
-function writeStore(store: MastersStore) {
-    if (typeof window === "undefined") return;
-    try {
-        window.localStorage.setItem(MASTERS_STORAGE_KEY, JSON.stringify(store));
-    } catch {
-        /* ignore quota / private mode */
-    }
-}
+type StoredRecord = MasterRecord & { setId: string };
+const stored = () => backend.get<StoredRecord>("masters");
 
 /** Records entered on the Masters page for one master. */
 export function loadMasterRecords(setId: string): MasterRecord[] {
-    return readStore()[setId] || [];
+    return stored().filter((r) => r.setId === setId).map(({ setId: _s, ...r }) => r);
 }
 
 export function saveMasterRecords(setId: string, records: MasterRecord[]) {
-    writeStore({ ...readStore(), [setId]: records });
+    backend.set("masters", [...stored().filter((r) => r.setId !== setId), ...records.map((r) => ({ ...r, setId }))]);
 }
 
 /**
  * Retrieves all registered master datasets, with their current records.
  */
 export function getMasterSets(): MasterSetDefinition[] {
-    const store = readStore();
-    return MASTER_DEFINITIONS.map((d) => ({ ...d, sampleRecords: store[d.id] || [] }));
+    return MASTER_DEFINITIONS.map((d) => ({ ...d, sampleRecords: loadMasterRecords(d.id) }));
 }
 
 /**
