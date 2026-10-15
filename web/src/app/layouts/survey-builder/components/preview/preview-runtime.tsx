@@ -540,6 +540,9 @@ interface PreviewAllQuestionsProps {
     runtimeAnswers: Record<string, any>;
     onChangeAnswer: (questionId: string, value: any) => void;
     onSelectQuestion?: (questionId: string) => void;
+    /** When given, the Submit button is live and calls this (used by the phone simulator). */
+    onSubmit?: () => void;
+    submitLabel?: string;
 }
 
 export function PreviewAllQuestions({
@@ -549,6 +552,8 @@ export function PreviewAllQuestions({
     runtimeAnswers,
     onChangeAnswer,
     onSelectQuestion,
+    onSubmit,
+    submitLabel = "Submit",
 }: PreviewAllQuestionsProps) {
     const defaultLocale = survey.defaultLocale || "en";
     // Tapping a master-data field opens the catalog page (records from the Masters page) over the form.
@@ -657,8 +662,8 @@ export function PreviewAllQuestions({
                 topLevel.map((q) => block(q))
             )}
             {topLevel.length > 0 && (
-                <Button type="button" size="sm" className="w-full h-9 text-xs font-semibold bg-zinc-900 text-zinc-50 dark:bg-zinc-100 dark:text-zinc-900" disabled>
-                    Submit
+                <Button type="button" size="sm" className="w-full h-9 text-xs font-semibold bg-zinc-900 text-zinc-50 dark:bg-zinc-100 dark:text-zinc-900" disabled={!onSubmit} onClick={onSubmit}>
+                    {submitLabel}
                 </Button>
             )}
         </div>
