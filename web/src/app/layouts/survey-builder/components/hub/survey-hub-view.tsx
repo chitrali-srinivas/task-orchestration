@@ -29,7 +29,6 @@ import {
 } from "@/components/ui/tooltip";
 import { AZOption } from "../../services/mock-surveys";
 import { SurveyModel } from "../../types/survey-schema";
-import { AZSelector } from "../navigation/az-selector";
 import { CreateSurveyDialog } from "../navigation/create-survey-dialog";
 import { serializeCoreSurveyJSON, serializeSurveyToBackend } from "../../lib/survey-serializer";
 
@@ -62,8 +61,6 @@ export function SurveyHubView({
     const [searchQuery, setSearchQuery] = useState("");
     const [activeTab, setActiveTab] = useState<"All" | "Published" | "Draft">("All");
     const [isCreateOpen, setIsCreateOpen] = useState(false);
-
-    const currentAz = azs.find((a) => a.id === selectedAzId) || azs[0];
 
     // Status counts
     const counts = useMemo(() => {
@@ -114,9 +111,6 @@ export function SurveyHubView({
                     
                     {/* Left: Zone Selector & Search Input */}
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="w-[180px] sm:w-[210px] shrink-0">
-                            <AZSelector azs={azs} selectedAzId={selectedAzId} onSelectAz={onSelectAz} />
-                        </div>
 
                         <div className="relative w-full max-w-[280px] sm:max-w-[320px]">
                             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-400" />
@@ -253,7 +247,7 @@ export function SurveyHubView({
                                         <Layers className="h-8 w-8 text-zinc-400 mx-auto" />
                                         <p className="font-semibold text-zinc-800 dark:text-zinc-200 text-xs">No surveys found</p>
                                         <p className="text-[11px] text-zinc-400">
-                                            {searchQuery ? `No surveys match "${searchQuery}" in ${currentAz.name}` : `No surveys configured in ${currentAz.name}`}
+                                            {searchQuery ? `No surveys match "${searchQuery}"` : "No surveys yet. Create the first one."}
                                         </p>
                                     </td>
                                 </tr>
@@ -374,7 +368,7 @@ export function SurveyHubView({
                 {/* Footer Count Summary */}
                 <div className="px-4 py-2.5 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 shrink-0">
                     <div className="flex items-center gap-2">
-                        <span>Showing <strong className="text-zinc-800 dark:text-zinc-200 font-medium">{filteredSurveys.length}</strong> of {surveys.length} surveys in {currentAz.id} ({currentAz.name.split(" - ")[1] || currentAz.name})</span>
+                        <span>Showing <strong className="text-zinc-800 dark:text-zinc-200 font-medium">{filteredSurveys.length}</strong> of {surveys.length} surveys</span>
                     </div>
 
                     <div className="flex items-center gap-3">

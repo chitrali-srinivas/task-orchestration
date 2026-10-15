@@ -49,7 +49,7 @@ export function CreateSurveyDialog({
 
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
-    const [azId, setAzId] = useState(currentAzId || "AZ2");
+    const [azId, setAzId] = useState(currentAzId || "");
     const [defaultLocale, setDefaultLocale] = useState("en");
     const [category, setCategory] = useState("");
     const [error, setError] = useState<string | null>(null);
@@ -143,18 +143,13 @@ export function CreateSurveyDialog({
                                 <Label htmlFor="survey-az" className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                                     Zone (AZ) <span className="text-rose-500">*</span>
                                 </Label>
-                                <Select value={azId} onValueChange={setAzId}>
-                                    <SelectTrigger id="survey-az" className="bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 h-9 text-xs">
-                                        <SelectValue placeholder="Select Zone" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100">
-                                        {azs.map((az) => (
-                                            <SelectItem key={az.id} value={az.id} className="text-xs">
-                                                {az.id} - {az.name.split(" - ")[1] || az.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Input
+                                    id="survey-az"
+                                    placeholder="e.g. ERW"
+                                    value={azId}
+                                    onChange={(e) => setAzId(e.target.value)}
+                                    className="bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 h-9 text-xs"
+                                />
                             </div>
 
                             <div className="space-y-1.5">

@@ -54,7 +54,7 @@ export function EditSurveyDetailsDialog({
     const [description, setDescription] = useState(survey.description || "");
     const [category, setCategory] = useState(survey.category || "Field Operations");
     const [defaultLocale, setDefaultLocale] = useState(survey.defaultLocale || "en");
-    const [azId, setAzId] = useState(survey.azId || "AZ2");
+    const [azId, setAzId] = useState(survey.azId || "");
     const [statuses, setStatuses] = useState<string[]>(survey.statuses?.length ? survey.statuses : [...DEFAULT_SURVEY_STATUSES]);
     const [newStatus, setNewStatus] = useState("");
     const [isSaving, setIsSaving] = useState(false);
@@ -66,7 +66,7 @@ export function EditSurveyDetailsDialog({
             setDescription(survey.description || "");
             setCategory(survey.category || "Field Operations");
             setDefaultLocale(survey.defaultLocale || "en");
-            setAzId(survey.azId || "AZ2");
+            setAzId(survey.azId || "");
             setStatuses(survey.statuses?.length ? survey.statuses : [...DEFAULT_SURVEY_STATUSES]);
             setNewStatus("");
             setError(null);
@@ -194,18 +194,14 @@ export function EditSurveyDetailsDialog({
                                 <Label htmlFor="edit-az" className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                                     Zone (AZ)
                                 </Label>
-                                <Select value={azId} onValueChange={setAzId} disabled={isPublished}>
-                                    <SelectTrigger id="edit-az" className="bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 h-9 text-xs">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="text-xs">
-                                        {azs.map((az) => (
-                                            <SelectItem key={az.id} value={az.id}>
-                                                {az.id} - {az.name.split(" - ")[1] || az.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Input
+                                    id="edit-az"
+                                    placeholder="e.g. ERW"
+                                    value={azId}
+                                    disabled={isPublished}
+                                    onChange={(e) => setAzId(e.target.value)}
+                                    className="bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 h-9 text-xs"
+                                />
                             </div>
 
                             <div className="space-y-1.5">
