@@ -11,7 +11,6 @@ import { QUESTION_TYPE_REGISTRY } from "../../registry/question-type-registry";
 import { generateColumnName, recalculateQuestionNumbers } from "../../lib/survey-normalizer";
 import { ValidationItem } from "../../lib/survey-validator";
 import { QuestionListItem } from "./question-list-item";
-import { AddQuestionPopover } from "./add-question-popover";
 import { DeleteQuestionDialog } from "./delete-question-dialog";
 
 interface QuestionListPanelProps {
@@ -612,18 +611,16 @@ export function QuestionListPanel({
                     </div>
 
                     {!isPublished && (
-                        <AddQuestionPopover
-                            onAddQuestion={onAddQuestion}
-                            trigger={
-                                <Button
-                                    size="sm"
-                                    className="h-7 px-2.5 text-xs font-semibold gap-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200 shadow-2xs cursor-pointer"
-                                >
-                                    <Plus className="h-3.5 w-3.5" />
-                                    <span>Add Question</span>
-                                </Button>
-                            }
-                        />
+                        /* Adds a Short Text question straight away; the type is changed via Response Type in the editor. */
+                        <Button
+                            size="sm"
+                            type="button"
+                            onClick={() => onAddQuestion("Subjective")}
+                            className="h-7 px-2.5 text-xs font-semibold gap-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-50 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200 shadow-2xs cursor-pointer"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                            <span>Add Question</span>
+                        </Button>
                     )}
                 </div>
 
