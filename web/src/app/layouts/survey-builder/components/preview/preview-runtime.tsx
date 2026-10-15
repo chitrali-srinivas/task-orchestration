@@ -527,3 +527,88 @@ function renderPreviewField(
             return <PreviewText question={question} value={value} onChange={onChange} locale={locale} />;
     }
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// Stacked preview: every visible question one below the other (no paging).
+// Used by the builder's phone frame; the paged PreviewRuntime stays for the
+// full-screen Preview.
+// ───────────────────────────────────────────────────────────────────────────
+interface PreviewAllQuestionsProps {
+    survey: SurveyModel;
+    selectedQuestionId?: string | null;
+    locale: string;
+    runtimeAnswers: Record<string, any>;
+    onChangeAnswer: (questionId: string, value: any) => void;
+    onSelectQuestion?: (questionId: string) => void;
+}
+
+export function PreviewAllQuestions({
+    survey,
+    selectedQuestionId,
+    locale,
+    runtimeAnswers,
+    onChangeAnswer,
+    onSelectQuestion,
+}: PreviewAllQuestionsProps) {
+    const defaultLocale = survey.defaultLocale || "en";
+    const childIds = useMemo(() => {
+        const ids = new Set<string>();
+        survey.questions.forEach((q) => (q.repeater?.isRepeater ? q.repeater.childQuestionIds || [] : []).forEach((id) => ids.add(id)));
+        return ids;
+    }, [survey.questions]);
+    const topLevel = survey.questions.filter((q) => !childIds.has(q.id) && isQuestionVisible(q, runtimeAnswers));
+    const title = (q: QuestionModel) => q.titles[locale] || q.titles[defaultLocale] || Object.values(q.titles)[0] || "";
+    const hint = (q: QuestionModel) => q.descriptions?.[locale] || q.descriptions?.[defaultLocale] || "";
+
+    const block = (q: QuestionModel, nested = false) => {
+        const children = q.repeater?.isRepeater
+            ? (q.repeater.childQuestionIds || []).map((id) => survey.questions.find((x) => x.id === id)).filter(Boolean) as QuestionModel[]
+            : [];
+        return (
+            <div
+                key={q.id}
+                onClick={() => onSelectQuestion?.(q.id)}
+                className={cn(
+                    "rounded-lg border p-3 space-y-2 cursor-pointer transition-colors",
+                    selectedQuestionId === q.id
+                        ? "border-zinc-900 dark:border-zinc-100 bg-zinc-50/60 dark:bg-zinc-900"
+                        : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-400",
+                    nested && "bg-zinc-50/40 dark:bg-zinc-900/40"
+                )}
+            >
+                <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-1.5 py-0.5 rounded">
+                        Q{q.displayIndex || q.number}
+                    </span>
+                    {q.validation?.required && <span className="text-[10px] text-rose-600 dark:text-rose-400 font-medium">* Required</span>}
+                </div>
+                <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 leading-snug">{title(q) || <span className="italic text-zinc-400">Untitled question</span>}</p>
+                {hint(q) && <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{hint(q)}</p>}
+                <div onClick={(e) => e.stopPropagation()}>
+                    {renderPreviewField(q, runtimeAnswers[q.id], (val) => onChangeAnswer(q.id, val), locale, () => {})}
+                </div>
+                {children.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                        <p className="text-[10px] uppercase tracking-wide text-zinc-400">Asked once per entry</p>
+                        {children.map((c) => block(c, true))}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    return (
+        <div className="h-full overflow-y-auto p-3 space-y-3 bg-white dark:bg-zinc-950">
+            {topLevel.length === 0 ? (
+                <p className="py-10 text-center text-xs text-zinc-400">No questions yet.</p>
+            ) : (
+                topLevel.map((q) => block(q))
+            )}
+            {topLevel.length > 0 && (
+                <Button type="button" size="sm" className="w-full h-9 text-xs font-semibold bg-zinc-900 text-zinc-50 dark:bg-zinc-100 dark:text-zinc-900" disabled>
+                    Submit
+                </Button>
+            )}
+        </div>
+    );
+}
