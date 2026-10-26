@@ -32,9 +32,9 @@ import {
 } from "../survey-builder/lib/master-data-registry";
 
 /**
- * Masters: define Supplier info and Fleet master records.
+ * Masters: define Supplier info, Fleet, Villages and Surveyors records.
  * Anything entered here is what the survey builder's "Master Data" option source
- * and the phone preview use.
+ * and the phone preview use; Surveyors and Villages also feed task assignment (routes).
  */
 export default function MastersPage() {
     return (
@@ -241,7 +241,13 @@ function RecordDialog({ title, fields, initial, allRecords, onSave, onClose }: R
                                     }}
                                 >
                                     <SelectTrigger id={`m-${f.key}`} className="h-9 text-xs">
-                                        <SelectValue placeholder={refOptions[f.key]?.length ? "Select…" : "Add suppliers first"} />
+                                        <SelectValue
+                                            placeholder={
+                                                refOptions[f.key]?.length
+                                                    ? "Select…"
+                                                    : `Add ${(MASTER_DEFINITIONS.find((d) => d.id === (f.editor as { setId: string }).setId)?.name || "records").toLowerCase()} first`
+                                            }
+                                        />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {(refOptions[f.key] || []).map((o) => <SelectItem key={o.id} value={o.id} className="text-xs">{o.label}</SelectItem>)}
@@ -251,6 +257,7 @@ function RecordDialog({ title, fields, initial, allRecords, onSave, onClose }: R
                                 <Input
                                     id={`m-${f.key}`}
                                     autoFocus={f.key === firstKey}
+                                    placeholder={f.editor?.kind === "text" ? f.editor.placeholder : undefined}
                                     value={draft[f.key] || ""}
                                     onChange={(e) => set({ [f.key]: e.target.value })}
                                     className="h-9 text-xs"
