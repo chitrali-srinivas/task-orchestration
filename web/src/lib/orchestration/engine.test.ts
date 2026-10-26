@@ -83,3 +83,11 @@ test("farmer name and village come from the registration answers", () => {
     assert.deepEqual(farmerFromResponse([{ id: "q3", columnName: "mobile" }], { q3: "9800000000" }, "Farmer 1"), { name: "9800000000", village: "" });
     assert.deepEqual(farmerFromResponse([{ id: "q3", columnName: "mobile" }], {}, "Farmer 7"), { name: "Farmer 7", village: "" });
 });
+
+test("farmer location: the registration GPS point, else the plot boundary's centre", () => {
+    const qs = [{ id: "q1", columnName: "farmer_name" }, { id: "q2", type: "PolygonBoundary" }, { id: "q3", type: "Map" }];
+    const plot = { vertices: [{ lat: 21, lng: 77 }, { lat: 22, lng: 78 }] };
+    assert.deepEqual(farmerFromResponse(qs, { q1: "A", q2: plot, q3: { lat: 21.5, lng: 77.2, accuracy: 2 } }, "").location, { lat: 21.5, lng: 77.2, source: "gps" });
+    assert.deepEqual(farmerFromResponse(qs, { q1: "A", q2: plot }, "").location, { lat: 21.5, lng: 77.5, source: "plot" });
+    assert.equal("location" in farmerFromResponse(qs, { q1: "A" }, ""), false);
+});

@@ -38,14 +38,27 @@ export interface Task {
     /** Task whose status change created this one (empty for registration tasks). */
     parentTaskId?: string;
     response?: Record<string, unknown>;
+    /** Comment given with the last HQ status change (required when cancelling). */
+    statusComment?: string;
     createdAt: string;
     updatedAt: string;
 }
+
+export interface LatLng {
+    lat: number;
+    lng: number;
+}
+
+/** Where a farmer's location comes from: a GPS point or plot boundary in the registration survey, or the village centre. */
+export type LocationSource = "gps" | "plot" | "village";
+export type Located = LatLng & { source: LocationSource };
 
 export interface Farmer {
     id: string;
     name: string;
     village: string;
+    /** Read from the registration answers (Map question, else the plot boundary's centre). */
+    location?: Located;
     createdAt: string;
 }
 
@@ -162,6 +175,7 @@ export function isPendingOnApp(task: Task, today: string): boolean {
 /** A question as the engine needs it to read a registration response. */
 export interface QuestionRef {
     id: string;
+    type?: string;
     columnName?: string;
     titles?: Record<string, string>;
 }
@@ -177,14 +191,32 @@ function answerText(v: unknown): string {
     return "";
 }
 
+const isLatLng = (v: unknown): v is LatLng =>
+    Boolean(v) && typeof (v as LatLng).lat === "number" && typeof (v as LatLng).lng === "number";
+
+/** First Map answer (GPS point), else the centre of the first plot boundary (PolygonBoundary vertices). */
+function locationFromResponse(questions: QuestionRef[], response: Record<string, unknown>): Located | undefined {
+    const point = questions.filter((q) => q.type === "Map").map((q) => response[q.id]).find(isLatLng);
+    if (point) return { lat: point.lat, lng: point.lng, source: "gps" };
+    for (const q of questions.filter((q) => q.type === "PolygonBoundary")) {
+        const vertices = ((response[q.id] as { vertices?: unknown[] } | undefined)?.vertices ?? []).filter(isLatLng);
+        if (vertices.length === 0) continue;
+        const mean = (key: "lat" | "lng") => vertices.reduce((sum, v) => sum + v[key], 0) / vertices.length;
+        return { lat: mean("lat"), lng: mean("lng"), source: "plot" };
+    }
+    return undefined;
+}
+
 /**
- * Farmer name and village from the first survey's answers: the question whose column name or
- * title mentions "name" / "village" wins; otherwise the first text answer is the name.
+ * Farmer name, village and location from the first survey's answers: the question whose column name or
+ * title mentions "name" / "village" wins; otherwise the first text answer is the name. The location is the
+ * first GPS point, else the first plot boundary's centre (absent when the survey has neither).
  */
-export function farmerFromResponse(questions: QuestionRef[], response: Record<string, unknown>, fallbackName: string): { name: string; village: string } {
+export function farmerFromResponse(questions: QuestionRef[], response: Record<string, unknown>, fallbackName: string): { name: string; village: string; location?: Located } {
     const find = (re: RegExp) => questions.find((q) => re.test(q.columnName || "") || re.test(q.titles?.en || ""));
     const pick = (q?: QuestionRef) => (q ? answerText(response[q.id]) : "");
     const name = pick(find(/name/i)) || questions.map((q) => pick(q)).find(Boolean) || fallbackName;
     const village = pick(find(/village/i));
-    return { name, village };
+    const location = locationFromResponse(questions, response);
+    return { name, village, ...(location ? { location } : {}) };
 }

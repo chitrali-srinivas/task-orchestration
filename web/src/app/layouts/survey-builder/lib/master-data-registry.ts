@@ -1,7 +1,7 @@
 /**
  * Master Data Registry
  *
- * Two masters are defined here (Supplier info, Fleet master). Their records are NOT
+ * Four masters are defined here (Supplier info, Fleet master, Villages, Surveyors). Their records are NOT
  * hard-coded: they are entered on the Masters page (/layouts/masters) and kept in
  * localStorage under `mati.masters`, so whatever is added there is what the survey
  * builder's master-data picker and the phone preview show.
@@ -62,6 +62,34 @@ export const MASTER_DEFINITIONS: Omit<MasterSetDefinition, "sampleRecords">[] = 
             { key: "vehicleType", label: "Vehicle type", isSearchable: true, isSecondary: true, editor: { kind: "select", options: ["JCB", "Trailer", "Truck"] } },
             { key: "supplierName", label: "Supplier name", isSearchable: true, isSecondary: true, editor: { kind: "ref", setId: "suppliers", idKey: "supplierId" } },
             { key: "supplierId", label: "Supplier id" },
+        ],
+    },
+    {
+        id: "villages",
+        name: "Villages",
+        description: "Villages with their centre point and radius (production's village_list fields). A farmer without a GPS point is visited at their village centre.",
+        category: "Geography",
+        displayFieldKey: "villageName",
+        fields: [
+            { key: "villageName", label: "Village name", isSearchable: true },
+            { key: "lat", label: "Latitude", isSecondary: true, editor: { kind: "text", placeholder: "21.2567" } },
+            { key: "lng", label: "Longitude", isSecondary: true, editor: { kind: "text", placeholder: "77.5104" } },
+            { key: "radiusKm", label: "Radius (km)", editor: { kind: "text", placeholder: "2" } },
+        ],
+    },
+    {
+        id: "surveyors",
+        name: "Surveyors",
+        description: "Field surveyors that pending tasks are assigned to. For now anyone can cover any village; a day's route holds at most \"Max visits per day\" farmer visits (8 when empty).",
+        category: "People",
+        displayFieldKey: "surveyorName",
+        fields: [
+            { key: "surveyorName", label: "Surveyor name", isSearchable: true },
+            { key: "phone", label: "Phone", isSearchable: true, isSecondary: true },
+            { key: "baseVillage", label: "Base village", isSecondary: true, editor: { kind: "ref", setId: "villages", idKey: "baseVillageId" } },
+            { key: "baseVillageId", label: "Base village id" },
+            { key: "maxVisitsPerDay", label: "Max visits per day", editor: { kind: "text", placeholder: "8" } },
+            { key: "active", label: "Active", editor: { kind: "select", options: ["Yes", "No"] } },
         ],
     },
 ];
