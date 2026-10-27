@@ -99,6 +99,7 @@ export function jobColumns(today: string): ColumnDef<JobRecord>[] {
                 return (
                     <div className="flex flex-col leading-tight">
                         {distanceKm === undefined ? muted : <span className="text-sm tabular-nums">{formatKm(distanceKm)}</span>}
+                        {distanceKm !== undefined && <span className="text-[10px] text-muted-foreground">straight-line</span>}
                         {unlocatedCount > 0 && (
                             <span className={cn("text-[10px] text-amber-600 dark:text-amber-400")}>
                                 {unlocatedCount} {unlocatedCount === 1 ? "stop" : "stops"} without location
