@@ -2,18 +2,21 @@
 
 // Job map — Google Maps (Maps JavaScript API). The key is NEXT_PUBLIC_GOOGLE_MAPS_API_KEY (platform/env.ts, see
 // web/.env.example); the loader uses the same id and libraries as the repo's other Google maps so they share one script.
-// Shows the base village and the numbered stops joined in visiting order and back to the base (straight lines until the
-// Routes API is wired in), each leg labelled with its distance and drive time, the day's unassigned tasks as grey pins
+// Shows the base village and the numbered stops joined in visiting order and back to the base (the road route from the
+// Routes API when it's in, straight dashed lines otherwise), each leg labelled with its distance and drive time, the day's
+// unassigned tasks as grey pins
 // and, when ticked, other jobs' stops; clicking a pin offers to add it to this job. Without a key it shows how to set
 // one; the task list and the route info work either way.
 import * as React from "react"
-import { GoogleMap, InfoWindow, Marker, OVERLAY_LAYER, OverlayViewF, Polyline, useJsApiLoader } from "@react-google-maps/api"
+import { GoogleMap, InfoWindowF, MarkerF, OVERLAY_MOUSE_TARGET, OverlayViewF, PolylineF, useJsApiLoader } from "@react-google-maps/api"
 import { MapPinOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { env } from "@/platform/env"
 import type { LatLng } from "@/lib/orchestration/engine"
 
 const LIBRARIES: "geometry"[] = ["geometry"]
+// The library's functional components (MarkerF, PolylineF, …) are used throughout: its class components can leave stale
+// overlays on the map under React 18+, e.g. the straight lines staying after the road route arrives.
 const CONTAINER = { width: "100%", height: "100%" }
 const centred = (width: number, height: number) => ({ x: -width / 2, y: -height / 2 })
 
@@ -51,6 +54,8 @@ interface JobMapProps {
     base?: LatLng
     stops: MapStop[]
     legs: MapLeg[]
+    /** The road route from Google, base to base; straight dashed lines between the nodes without it. */
+    roadPath?: LatLng[]
     candidates: MapCandidate[]
     activeKey?: string | null
     onSelectStop: (key: string) => void
@@ -78,7 +83,7 @@ export function JobMap(props: JobMapProps) {
     return <GoogleJobMap {...props} />
 }
 
-function GoogleJobMap({ base, stops, legs, candidates, activeKey, onSelectStop, onPickCandidate }: JobMapProps) {
+function GoogleJobMap({ base, stops, legs, roadPath, candidates, activeKey, onSelectStop, onPickCandidate }: JobMapProps) {
     const { isLoaded, loadError } = useJsApiLoader({ id: "google-map-script", googleMapsApiKey: env.googleMapsApiKey, libraries: LIBRARIES })
     const [map, setMap] = React.useState<google.maps.Map | null>(null)
     const [openKey, setOpenKey] = React.useState<string | null>(null)
@@ -122,10 +127,24 @@ function GoogleJobMap({ base, stops, legs, candidates, activeKey, onSelectStop, 
             onLoad={setMap}
             onUnmount={() => setMap(null)}
             onClick={() => setOpenKey(null)}
-            options={{ mapTypeId: "hybrid", streetViewControl: false, fullscreenControl: false, clickableIcons: false, mapTypeControl: true }}
+            options={{
+                mapTypeId: "hybrid",
+                streetViewControl: false,
+                fullscreenControl: false,
+                clickableIcons: false,
+                mapTypeControl: true,
+                // Top left is the legend card's place.
+                mapTypeControlOptions: { position: google.maps.ControlPosition.TOP_RIGHT },
+            }}
         >
-            {path.length > 1 && (
-                <Polyline
+            {roadPath && roadPath.length > 1 && (
+                <>
+                    <PolylineF path={roadPath} options={{ strokeColor: "#ffffff", strokeOpacity: 0.9, strokeWeight: 7, zIndex: 1 }} />
+                    <PolylineF path={roadPath} options={{ strokeColor: "#3b82f6", strokeOpacity: 1, strokeWeight: 4, zIndex: 2 }} />
+                </>
+            )}
+            {!roadPath && path.length > 1 && (
+                <PolylineF
                     path={path}
                     options={{
                         strokeOpacity: 0,
@@ -137,14 +156,15 @@ function GoogleJobMap({ base, stops, legs, candidates, activeKey, onSelectStop, 
                 <OverlayViewF
                     key={leg.key}
                     position={leg.labelAt}
-                    mapPaneName={OVERLAY_LAYER}
+                    // Above the route line (which sits on the overlay layer), so a label on the road stays readable.
+                    mapPaneName={OVERLAY_MOUSE_TARGET}
                     getPixelPositionOffset={centred}
                 >
                     <div className="whitespace-nowrap rounded-full border border-zinc-200 bg-white/95 px-2 py-0.5 text-[10px] font-semibold text-zinc-800 shadow-sm">{leg.label}</div>
                 </OverlayViewF>
             ))}
             {candidates.map((c) => (
-                <Marker
+                <MarkerF
                     key={c.key}
                     position={c.location}
                     title={c.label}
@@ -161,7 +181,7 @@ function GoogleJobMap({ base, stops, legs, candidates, activeKey, onSelectStop, 
                 />
             ))}
             {base && (
-                <Marker
+                <MarkerF
                     position={base}
                     title="Base village"
                     zIndex={200}
@@ -172,7 +192,7 @@ function GoogleJobMap({ base, stops, legs, candidates, activeKey, onSelectStop, 
             {stops.map((s) => {
                 const active = s.key === activeKey
                 return (
-                    <Marker
+                    <MarkerF
                         key={s.key}
                         position={s.location}
                         title={`Stop ${s.no} · ${s.label}`}
@@ -191,7 +211,7 @@ function GoogleJobMap({ base, stops, legs, candidates, activeKey, onSelectStop, 
                 )
             })}
             {open && (
-                <InfoWindow position={open.location} onCloseClick={() => setOpenKey(null)}>
+                <InfoWindowF position={open.location} onCloseClick={() => setOpenKey(null)}>
                     <div className="min-w-[160px] space-y-1 text-zinc-900">
                         <div className="text-xs font-semibold">{open.label}</div>
                         <div className="text-[11px] text-zinc-600">{open.detail}</div>
@@ -208,7 +228,7 @@ function GoogleJobMap({ base, stops, legs, candidates, activeKey, onSelectStop, 
                             </Button>
                         )}
                     </div>
-                </InfoWindow>
+                </InfoWindowF>
             )}
         </GoogleMap>
     )

@@ -1,10 +1,12 @@
 "use client"
 
-// Job workspace — full screen, laid out like the Deployment map view: the Google map in the middle (numbered stops, each
-// leg labelled with distance and drive time, a legend card), the route's task list as a rim beside it (base → stops →
-// base with the km and minutes between each pair of nodes), and the job on the right: surveyor, route info, actions
-// (change surveyor or rearrange, each previewing the change in distance before it's saved; add tasks) and the timeline,
-// with the previous / next pager and the status actions at the bottom. Changes are allowed until the surveyor accepts.
+// Job workspace — full screen, laid out like the Deployment map view: the Google map in the middle (numbered stops, the
+// road route with each leg labelled with distance and drive time, a legend card), the route's task list as a rim beside
+// it (base → stops → base with the km and minutes between each pair of nodes), and the job on the right: surveyor, route
+// info, actions (change surveyor or rearrange, each previewing the change in distance before it's saved; add tasks) and
+// the timeline, with the previous / next pager and the status actions at the bottom. Road routes come from the Google
+// Routes API through our server route (data/road-route.ts); until one arrives, or without a Routes key, legs are
+// straight lines with estimated times. Changes are allowed until the surveyor accepts.
 import * as React from "react"
 import { format } from "date-fns"
 import { ArrowDown, ArrowUp, CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, MoreVertical, Search, Send, Shuffle, Trash2, Undo2, X } from "lucide-react"
@@ -22,6 +24,7 @@ import {
     EFFORT,
     JOB_STATUS,
     Job,
+    JobEffort,
     JobEvent,
     JobStop,
     Surveyor,
@@ -38,10 +41,12 @@ import {
     unfinishedStops,
     visitableOn,
 } from "@/lib/orchestration/jobs"
+import type { RoadRoute } from "@/lib/orchestration/roads"
 import type { SurveyModel } from "@/app/layouts/survey-builder/types/survey-schema"
 import { cn } from "@/lib/utils"
 import { JobRecord } from "../data/schema"
 import { baseOf } from "../data/data-source"
+import { RoadRouteState, useRoadRoute } from "../data/road-route"
 import { formatKm, formatMinutes, formatYmd, initials } from "./columns"
 import { JobStatusBadge } from "./job-status"
 import { CloseJobDialog } from "./job-dialogs"
@@ -73,8 +78,8 @@ function eventText(e: JobEvent): string {
 const legText = (km: number, min: number) => `${km.toFixed(1)} km · ${min} min`
 const signed = (n: number, unit: string, digits = 0) => `${n > 0 ? "+" : n < 0 ? "−" : "±"}${Math.abs(n).toFixed(digits)} ${unit}`
 
-/** "19.7 km → 18.2 km (−1.5 km · −4 min)": what a change does to the round trip. */
-function Delta({ fromKm, toKm, fromMin, toMin }: { fromKm?: number; toKm?: number; fromMin: number; toMin: number }) {
+/** "19.7 km → 18.2 km (−1.5 km · −4 min)": what a change does to the round trip, by road or by straight-line estimate. */
+function Delta({ fromKm, toKm, fromMin, toMin, basis }: { fromKm?: number; toKm?: number; fromMin: number; toMin: number; basis: string }) {
     if (fromKm === undefined || toKm === undefined) return <p className="text-[11px] text-zinc-500">No stop has a location, so distance can&apos;t be compared.</p>
     const dKm = toKm - fromKm
     const better = dKm < -0.05
@@ -83,6 +88,7 @@ function Delta({ fromKm, toKm, fromMin, toMin }: { fromKm?: number; toKm?: numbe
         <p className={cn("text-xs tabular-nums", better ? "text-emerald-700 dark:text-emerald-400" : worse ? "text-red-600 dark:text-red-400" : "text-zinc-600 dark:text-zinc-400")}>
             {formatKm(fromKm)} → <span className="font-semibold">{formatKm(toKm)}</span>{" "}
             {better || worse ? `(${signed(dKm, "km", 1)} · ${signed(toMin - fromMin, "min")})` : "(same distance)"}
+            <span className="text-[10px] font-normal text-zinc-400"> · {basis}</span>
         </p>
     )
 }
@@ -136,7 +142,11 @@ interface JobDetailSheetProps {
     onRemoveTasks: (taskIds: string[]) => void
 }
 
-export function JobDetailSheet({
+export function JobDetailSheet(props: JobDetailSheetProps) {
+    return props.record ? <JobWorkspace {...props} record={props.record} /> : null
+}
+
+function JobWorkspace({
     record,
     open,
     onOpenChange,
@@ -161,7 +171,7 @@ export function JobDetailSheet({
     onAddTasks,
     onMoveTasks,
     onRemoveTasks,
-}: JobDetailSheetProps) {
+}: Omit<JobDetailSheetProps, "record"> & { record: JobRecord }) {
     const [closing, setClosing] = React.useState(false)
     const [query, setQuery] = React.useState("")
     const [activeKey, setActiveKey] = React.useState<string | null>(null)
@@ -175,7 +185,6 @@ export function JobDetailSheet({
     const surveyName = React.useMemo(() => new Map(surveys.map((s) => [s.id, s.name])), [surveys])
     const surveyorById = React.useMemo(() => new Map(surveyors.map((s) => [s.id, s])), [surveyors])
 
-    if (!record) return null
     const job = record.job
     const surveyor = surveyorById.get(job.surveyorId)
     const editable = isEditable(job)
@@ -200,6 +209,14 @@ export function JobDetailSheet({
     const bestSaves = savedEffort.km !== undefined && bestEffort.km !== undefined && savedEffort.km - bestEffort.km > 0.05
     const pendingSurveyor = editable && pending?.jobId === job.id && pending.surveyorId !== job.surveyorId ? surveyorById.get(pending.surveyorId) : undefined
     const pendingEffort = pendingSurveyor ? effortOf(job.stops, baseOf(pendingSurveyor, villages)) : undefined
+    /** The nodes a road route runs through: the base, the stops that have a location, back to the base. */
+    const routePoints = (stops: JobStop[], from?: LatLng) => {
+        const points: LatLng[] = stops.flatMap((s) => {
+            const p = locate(s.farmerId)
+            return p ? [p] : []
+        })
+        return points.length === 0 ? [] : [...(from ? [from] : []), ...points, ...(from ? [from] : [])]
+    }
 
     const located = shown.map((s) => locate(s.farmerId))
     const stopDone = (stop: JobStop) => stop.taskIds.every((id) => taskById.get(id)?.status !== STATUS.planned)
@@ -236,11 +253,66 @@ export function JobDetailSheet({
         located[i] ? [{ key: `s:${s.farmerId}`, no: i + 1, label: farmerName(s.farmerId), location: located[i]!, done: stopDone(s) }] : []
     )
     const nodes = [...(base ? [{ key: "base", at: base }] : []), ...mapStops.map((s) => ({ key: s.key, at: s.location })), ...(base && mapStops.length > 0 ? [{ key: "base-end", at: base }] : [])]
+    // Road routes: the order shown, the saved order while rearranging, and the order from another surveyor's base while
+    // handing over. Each is fetched once and cached; until it arrives (or without a Routes key) legs are straight lines.
+    const road = useRoadRoute(nodes.map((n) => n.at))
+    const savedRoad = useRoadRoute(routePoints(job.stops, base), Boolean(draftOrder))
+    const pendingRoad = useRoadRoute(pendingSurveyor ? routePoints(job.stops, baseOf(pendingSurveyor, villages)) : [], Boolean(pendingSurveyor))
+    const readyRoute = (state: RoadRouteState) => (state.status === "ready" ? state.route : undefined)
+    const shownRoute = readyRoute(road)
+    const savedRoute = draftOrder ? readyRoute(savedRoad) : shownRoute
+    const pendingRoute = readyRoute(pendingRoad)
+    const totals = (route: RoadRoute | undefined, straight: JobEffort) =>
+        route
+            ? { km: route.km as number | undefined, driveMin: route.minutes, onSiteMin: straight.onSiteMin, totalMin: route.minutes + straight.onSiteMin }
+            : { km: straight.km, driveMin: straight.driveMin, onSiteMin: straight.onSiteMin, totalMin: straight.totalMin }
+    /** Two orders compared on the same basis: by road when both road routes are in, by straight-line estimate otherwise. */
+    const compare = (a: RoadRoute | undefined, aStraight: JobEffort, b: RoadRoute | undefined, bStraight: JobEffort) =>
+        a && b
+            ? { from: totals(a, aStraight), to: totals(b, bStraight), basis: "by road" }
+            : { from: totals(undefined, aStraight), to: totals(undefined, bStraight), basis: "straight-line estimate" }
+    const shownTotals = totals(shownRoute, effort)
+    const deltaProps = (c: ReturnType<typeof compare>) => ({ fromKm: c.from.km, toKm: c.to.km, fromMin: c.from.totalMin, toMin: c.to.totalMin, basis: c.basis })
+    const roadNote =
+        road.status === "ready"
+            ? "Road route and drive times from Google, without traffic."
+            : road.status === "loading"
+              ? "Finding the road route…"
+              : road.status === "error"
+                ? `Road route unavailable (${road.message}); straight lines and estimated times shown.`
+                : road.message
+                  ? `Straight lines and estimated times: ${road.message}`
+                  : "Straight lines and estimated times."
+
+    // Road legs follow the nodes (base, stops with a location, base): the leg arriving at each shown stop, and the way back.
+    const locatedCount = located.filter(Boolean).length
+    const arrivingLeg = located.map((loc, i) => {
+        if (!loc) return undefined
+        const k = located.slice(0, i).filter(Boolean).length - (base ? 0 : 1)
+        return k >= 0 ? k : undefined
+    })
+    const legInfo = (i: number) => {
+        const leg = shownRoute && arrivingLeg[i] !== undefined ? shownRoute.legs[arrivingLeg[i]!] : undefined
+        return leg ? { km: leg.km as number | undefined, min: leg.minutes as number | undefined } : { km: effort.stops[i].km, min: effort.stops[i].driveMin }
+    }
+    const returnRoadLeg = shownRoute && base && locatedCount > 0 ? shownRoute.legs[locatedCount] : undefined
+    const returnInfo = returnRoadLeg
+        ? { km: returnRoadLeg.km, min: returnRoadLeg.minutes }
+        : effort.returnKm !== undefined
+          ? { km: effort.returnKm, min: driveMinutes(effort.returnKm) }
+          : undefined
+
     // A leg's label sits at its middle, or further along when that would cover a marker or another leg's label (legs can
     // pass right by a stop, or run back along the same road); when nowhere is clear, the least crowded spot.
     const placed: LatLng[] = []
-    const labelAt = (a: LatLng, b: LatLng, km: number) => {
-        const spots = [0.5, 0.35, 0.65, 0.25, 0.75, 0.15, 0.85].map((t) => ({ lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t }))
+    const along = (path: LatLng[], t: number) => {
+        const pos = t * (path.length - 1)
+        const i = Math.min(Math.floor(pos), path.length - 2)
+        const f = pos - i
+        return { lat: path[i].lat + (path[i + 1].lat - path[i].lat) * f, lng: path[i].lng + (path[i + 1].lng - path[i].lng) * f }
+    }
+    const labelAt = (path: LatLng[], km: number) => {
+        const spots = [0.5, 0.35, 0.65, 0.25, 0.75, 0.15, 0.85].map((t) => along(path, t))
         const room = (p: LatLng) => Math.min(...[...nodes.map((n) => n.at), ...placed].map((q) => distanceKm(p, q)))
         const spot = spots.find((p) => room(p) > Math.max(0.15 * km, 0.4)) ?? spots.reduce((best, p) => (room(p) > room(best) ? p : best))
         placed.push(spot)
@@ -248,8 +320,10 @@ export function JobDetailSheet({
     }
     const legs: MapLeg[] = nodes.slice(1).flatMap((n, i) => {
         const from = nodes[i]
-        const km = distanceKm(from.at, n.at)
-        return km < 0.05 ? [] : [{ key: `${from.key}>${n.key}`, from: from.at, to: n.at, labelAt: labelAt(from.at, n.at, km), label: legText(km, driveMinutes(km)) }]
+        const roadLeg = shownRoute?.legs[i]
+        const km = roadLeg?.km ?? distanceKm(from.at, n.at)
+        const path = roadLeg && roadLeg.path.length > 1 ? roadLeg.path : [from.at, n.at]
+        return km < 0.05 ? [] : [{ key: `${from.key}>${n.key}`, from: from.at, to: n.at, labelAt: labelAt(path, km), label: legText(km, roadLeg?.minutes ?? driveMinutes(km)) }]
     })
     const addLabel = (farmerId: string, verb: string) => (editable && !fullFor(farmerId) ? `${verb} to ${record.jobCode}` : undefined)
     const unassignedFarmers = Array.from(new Set(pool.filter((p) => !p.holder).map((p) => p.task.farmerId)))
@@ -324,7 +398,16 @@ export function JobDetailSheet({
                 >
                     {/* Map, in the middle */}
                     <div className="relative h-[45vh] lg:h-auto lg:flex-1 min-w-0 bg-zinc-100 dark:bg-zinc-900">
-                        <JobMap base={base} stops={mapStops} legs={legs} candidates={candidates} activeKey={activeKey} onSelectStop={selectStop} onPickCandidate={pickCandidate} />
+                        <JobMap
+                            base={base}
+                            stops={mapStops}
+                            legs={legs}
+                            roadPath={shownRoute?.legs.flatMap((l) => l.path)}
+                            candidates={candidates}
+                            activeKey={activeKey}
+                            onSelectStop={selectStop}
+                            onPickCandidate={pickCandidate}
+                        />
                         {hasMapKey && (
                             <div className="absolute left-3 top-3 z-10 w-[230px] space-y-1.5 rounded-lg border border-zinc-200 bg-white/95 p-3 text-[11px] text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95 dark:text-zinc-300">
                                 <div className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Legend</div>
@@ -336,6 +419,10 @@ export function JobDetailSheet({
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span className="h-4 w-4 rounded-full bg-emerald-600" /> Stop done
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {shownRoute ? <span className="h-1 w-4 rounded bg-blue-500" /> : <span className="w-4 border-t-2 border-dashed border-zinc-500" />}
+                                    {shownRoute ? "Road route" : "Straight line between stops"}
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span className="rounded-full border border-zinc-200 bg-white px-1.5 text-[9px] font-semibold text-zinc-800">4.6 km · 11 min</span> Leg distance · drive
@@ -350,7 +437,7 @@ export function JobDetailSheet({
                                     <Checkbox checked={showOtherJobs} onCheckedChange={(v) => setShowOtherJobs(Boolean(v))} className="h-3.5 w-3.5" />
                                     <span className="h-2.5 w-2.5 rounded-full bg-sky-400" /> Other jobs&apos; stops
                                 </label>
-                                <p className="pt-1 text-[10px] text-zinc-400">Straight lines; road routes come with the Routes API.</p>
+                                <p className="pt-1 text-[10px] text-zinc-400">{roadNote}</p>
                             </div>
                         )}
                     </div>
@@ -379,7 +466,7 @@ export function JobDetailSheet({
                                         const done = stopDone(stop)
                                         return (
                                             <React.Fragment key={stop.farmerId}>
-                                                {(base || i > 0) && connector(effort.stops[i].km, effort.stops[i].driveMin, `leg-${stop.farmerId}`)}
+                                                {(base || i > 0) && connector(legInfo(i).km, legInfo(i).min, `leg-${stop.farmerId}`)}
                                                 <div
                                                     id={`job-stop-${key}`}
                                                     onClick={() => setActiveKey(key)}
@@ -487,9 +574,9 @@ export function JobDetailSheet({
                                             </React.Fragment>
                                         )
                                     })}
-                                    {base && effort.returnKm !== undefined && (
+                                    {base && returnInfo && (
                                         <>
-                                            {connector(effort.returnKm, driveMinutes(effort.returnKm), "leg-return")}
+                                            {connector(returnInfo.km, returnInfo.min, "leg-return")}
                                             <div className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
                                                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 border-zinc-900 text-[10px] font-bold text-zinc-900 dark:border-zinc-100 dark:text-zinc-100">B</span>
                                                 Back to base {baseName}
@@ -542,13 +629,14 @@ export function JobDetailSheet({
                             <div className="space-y-2">
                                 <SectionTitle>Route info</SectionTitle>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <Stat label="Distance" value={effort.km === undefined ? "-" : formatKm(effort.km)} />
-                                    <Stat label="Day effort" value={formatMinutes(effort.totalMin)} />
-                                    <Stat label="Drive" value={formatMinutes(effort.driveMin)} />
-                                    <Stat label="On site" value={formatMinutes(effort.onSiteMin)} />
+                                    <Stat label={shownRoute ? "Distance · road" : "Distance · straight-line"} value={shownTotals.km === undefined ? "-" : formatKm(shownTotals.km)} />
+                                    <Stat label="Day effort" value={formatMinutes(shownTotals.totalMin)} />
+                                    <Stat label={shownRoute ? "Drive · Google" : "Drive · estimate"} value={formatMinutes(shownTotals.driveMin)} />
+                                    <Stat label="On site" value={formatMinutes(shownTotals.onSiteMin)} />
                                 </div>
                                 <p className="text-[10px] text-zinc-400">
-                                    Round trip from the base village, straight-line at {EFFORT.driveKmh} km/h, {EFFORT.minutesPerTask} min per task on site.
+                                    Round trip from the base village.{" "}
+                                    {shownRoute ? "Road distance and drive time from Google, without traffic" : `Straight-line at ${EFFORT.driveKmh} km/h until the road route is in`}; {EFFORT.minutesPerTask} min per task on site.
                                     {record.unlocatedCount > 0 && ` ${record.unlocatedCount} stop${record.unlocatedCount === 1 ? " has" : "s have"} no location and ${record.unlocatedCount === 1 ? "isn't" : "aren't"} in the distance.`}
                                 </p>
                             </div>
@@ -584,7 +672,7 @@ export function JobDetailSheet({
                                                     {pendingSurveyor.name} starts from{" "}
                                                     {villages.find((v) => v.id === pendingSurveyor.baseVillageId)?.name ? `base ${villages.find((v) => v.id === pendingSurveyor.baseVillageId)?.name}` : "no base village"}.
                                                 </p>
-                                                <Delta fromKm={savedEffort.km} toKm={pendingEffort.km} fromMin={savedEffort.totalMin} toMin={pendingEffort.totalMin} />
+                                                <Delta {...deltaProps(compare(savedRoute, savedEffort, pendingRoute, pendingEffort))} />
                                                 <div className="flex gap-2">
                                                     <Button variant="outline" size="sm" className="h-8 flex-1 text-xs" onClick={() => setPending(null)}>
                                                         Keep {surveyor?.name ?? "current"}
@@ -610,7 +698,7 @@ export function JobDetailSheet({
                                             {draftOrder ? (
                                                 <div className="space-y-2 rounded-lg border border-sky-200 dark:border-sky-900/50 bg-sky-50/50 dark:bg-sky-950/20 p-3">
                                                     <p className="text-xs text-zinc-700 dark:text-zinc-300">Move stops with the arrows in the route list.</p>
-                                                    <Delta fromKm={savedEffort.km} toKm={effort.km} fromMin={savedEffort.totalMin} toMin={effort.totalMin} />
+                                                    <Delta {...deltaProps(compare(savedRoute, savedEffort, shownRoute, effort))} />
                                                     <div className="flex gap-2">
                                                         <Button variant="outline" size="sm" className="h-8 flex-1 text-xs" onClick={() => setDraft(null)}>
                                                             Discard
@@ -638,8 +726,8 @@ export function JobDetailSheet({
                                                 <div className="space-y-2">
                                                     <p className={cn("text-xs", bestSaves ? "text-emerald-700 dark:text-emerald-400" : "text-zinc-500")}>
                                                         {bestSaves && savedEffort.km !== undefined && bestEffort.km !== undefined
-                                                            ? `A shorter order saves ${formatKm(savedEffort.km - bestEffort.km)} (${formatMinutes(savedEffort.totalMin - bestEffort.totalMin)}).`
-                                                            : "This is already the shortest order."}
+                                                            ? `A shorter order saves about ${formatKm(savedEffort.km - bestEffort.km)} (${formatMinutes(savedEffort.totalMin - bestEffort.totalMin)}) by straight-line estimate. Preview it to see the road numbers.`
+                                                            : "This is already the shortest order by straight-line distance."}
                                                     </p>
                                                     <div className="flex gap-2">
                                                         <Button variant="outline" size="sm" className="h-8 flex-1 text-xs" onClick={() => setDraft({ jobId: job.id, order: job.stops.map((s) => s.farmerId) })}>
