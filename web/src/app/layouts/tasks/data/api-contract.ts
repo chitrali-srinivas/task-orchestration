@@ -9,8 +9,8 @@ export const tasksApiContract: TableApiContract = {
     source: "PROPOSED — no production endpoint; data comes from web/src/lib/orchestration/store.ts (localStorage)",
     pagination: "page",
     search: false,
-    columnSearch: ["taskCode", "surveyName", "farmerName", "village", "assignedTo", "visitDate", "createdFrom", "plannedStart", "plannedEnd"],
-    sort: ["taskNo", "taskCode", "surveyName", "farmerName", "village", "status", "assignedTo", "visitDate", "plannedStart", "plannedEnd", "createdFrom", "updatedAt"],
+    columnSearch: ["taskCode", "surveyName", "farmerName", "village", "jobCode", "assignedTo", "visitDate", "createdFrom", "plannedStart", "plannedEnd"],
+    sort: ["taskNo", "taskCode", "surveyName", "farmerName", "village", "status", "jobCode", "assignedTo", "visitDate", "plannedStart", "plannedEnd", "createdFrom", "updatedAt"],
     filters: {
         tabStatus: "status (planned | collected | verified | expired | cancelled | custom template status) — the tab; counts per status",
         surveyName: "survey_ids[]",
@@ -19,12 +19,12 @@ export const tasksApiContract: TableApiContract = {
         createdFrom: "origin[] (registration | follow-up)",
         plannedStart: "planned_start_from / planned_start_to (YYYY-MM-DD, inclusive)",
         plannedEnd: "planned_end_from / planned_end_to (YYYY-MM-DD, inclusive; indefinite tasks never match)",
-        assignedTo: "surveyor_ids[] (\"unassigned\" = on no published route)",
-        visitDate: "visit_date_from / visit_date_to (YYYY-MM-DD, inclusive; unassigned tasks never match)",
+        assignedTo: "surveyor_ids[] (\"unassigned\" = on no job)",
+        visitDate: "job_date_from / job_date_to (YYYY-MM-DD, inclusive; unassigned tasks never match)",
     },
     notes: {
         endpoint: "Tasks are created by the orchestration engine (web/src/lib/orchestration/engine.ts); a list endpoint over them is still to be designed.",
         sort: "Without sort_by the API must return the work-queue order: status level (template lifecycle order, pending first), then planned start oldest first, then task number. Pending tasks in this order feed route planning for surveyor assignment.",
-        assignedTo: "Assigned to / visit date / stop come from published routes (one per surveyor per day, one stop per farmer visit; web/src/lib/orchestration/routes.ts), joined onto each task row. They are not task fields.",
+        assignedTo: "Job / assigned to / visit date / stop come from jobs (one per surveyor per day, one stop per farmer visit; web/src/lib/orchestration/jobs.ts): the open job holding the task, else the closed job that did it. They are not task fields.",
     },
 };

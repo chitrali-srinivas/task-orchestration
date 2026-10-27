@@ -1,6 +1,7 @@
 // PORT-BOUND — one row of the Tasks table: a task joined with its farmer, survey template and parent task.
 // Flat fields (taskCode, surveyName, farmerName, …) are what the table sorts, searches and filters on.
 import type { Task } from "@/lib/orchestration/engine";
+import type { JobStatus } from "@/lib/orchestration/jobs";
 
 export interface TaskRecord {
     id: string;
@@ -25,15 +26,25 @@ export interface TaskRecord {
     /** ISO timestamp */
     updatedAt: string;
     statusComment?: string;
-    /** From the published route the task is on (assignment is not a task status). */
+    /**
+     * From the job the task is on (assignment is not a task status): its open job, or the closed job that did it.
+     * A task released by a closed job (still planned) has none of these, only `jobNote`.
+     */
     surveyorId?: string;
     assignedTo?: string;
-    /** YYYY-MM-DD, the route's day. */
+    /** YYYY-MM-DD, the job's day. */
     visitDate?: string;
-    routeId?: string;
-    /** 1-based stop on the route, and the route's number of stops. */
+    jobId?: string;
+    /** "J12" */
+    jobCode?: string;
+    jobStatus?: JobStatus;
+    /** Stops can still change (the surveyor hasn't accepted the job). */
+    jobEditable?: boolean;
+    /** 1-based stop on the job, and the job's number of stops. */
     stopNo?: number;
     stopCount?: number;
+    /** Why a closed job left this task undone ("Not done on J12: farmer away"). */
+    jobNote?: string;
     /**
      * Default order of the table: status level (lifecycle order, pending first), then oldest planned start, then task
      * number, as one sortable string ("00|2026-09-20|000003").

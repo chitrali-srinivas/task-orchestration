@@ -7,15 +7,26 @@ No seed data: everything is created in the UI. All pages are in the Next.js app 
 cd web && npm install && npx next dev -p 3100
 ```
 
+## Environment
+
+Copy `web/.env.example` to `web/.env.local` (git-ignored) and fill it in, then restart the dev server: `NEXT_PUBLIC_*` values are built into the browser bundle.
+
+| Variable | Needed for |
+|---|---|
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | **Required for maps**: the Task planning job map (also the Deployment and Map view pages). In Google Cloud, enable the **Maps JavaScript API** for the key and restrict it to your site addresses (`http://localhost:3100/*`, the Cloud Run URL). Without it the map panel says how to set it; lists, distances and effort still work. |
+
+Road routes and drive times will use the Google Routes API with a separate, server-only key (not `NEXT_PUBLIC_`), called from a Next.js server route; until then routes are straight lines and times are estimates.
+
 | URL | Page |
 |---|---|
 | `/layouts/survey-builder/v1-0` | **Survey Builder** — the original builder, simplified; a survey has **statuses** (default `planned, collected, verified, expired, cancelled`) |
 | `/layouts/survey-workflow` | **Survey Workflow** — one per season: which survey follows which, on what status, when its task is created, and for how long it is valid |
-| `/layouts/tasks` | **Tasks** — HQ summary of every task: id, survey template, farmer, status, assigned surveyor and visit date, planned start/end, what created it; Assign / Verify / Cancel |
-| `/phone` | **Phone simulator** — the surveyor app: register a farmer (fills the first survey), do pending tasks; pick a surveyor to see their route for today |
-| `/layouts/masters` | **Masters** — Supplier info and Fleet records used by "Master data" questions; Villages and Surveyors used for routes |
+| `/layouts/tasks` | **Tasks** — HQ summary of every task: id, survey template, farmer, status, job, assigned surveyor and visit date, planned start/end, what created it; Plan these / Add to job / Verify / Cancel |
+| `/layouts/task-planning` | **Task planning** — jobs (one surveyor's visits for one day): Plan jobs (pick the day, active surveyors and farmers; the planner allocates and orders the stops); the full-screen job workspace (Google map in the middle with numbered stops and each leg's distance / drive time; the route's tasks as a rim beside it; on the right the route info and actions: change surveyor or rearrange with a preview of the change in distance, add tasks by id / farmer or from the map, move a task to another surveyor, remove); Assign, follow progress, close job sheets |
+| `/phone` | **Phone simulator** — the surveyor app: register a farmer (fills the first survey), do pending tasks; pick a surveyor to accept / decline, start and close their jobs |
+| `/layouts/masters` | **Masters** — Supplier info and Fleet records used by "Master data" questions; Villages and Surveyors used for jobs |
 
-Storage is the browser's localStorage for now (`mati.surveys`, `mati.workflows`, `mati.masters`, `mati.farmers`, `mati.tasks`, `mati.routes`, `mati.sim`). Swapping it for Supabase only touches `web/src/lib/orchestration/store.ts` and the per-page loaders.
+Storage is the browser's localStorage for now (`mati.surveys`, `mati.workflows`, `mati.masters`, `mati.farmers`, `mati.tasks`, `mati.jobs`, `mati.sim`). Swapping it for Supabase only touches `web/src/lib/orchestration/store.ts` and the per-page loaders.
 
 ## Deploy (Cloud Run)
 
@@ -26,6 +37,16 @@ gcloud run deploy task-orchestration --source . --region <region> --allow-unauth
 ```
 
 Without Supabase variables the deployed app is the browser-only demo (data per browser).
+
+`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` must be present **when the image is built** (it's baked into the browser bundle); the Dockerfile takes it as a build argument. With Docker:
+
+```bash
+docker build --build-arg NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=<key> -t <region>-docker.pkg.dev/<project>/<repo>/task-orchestration .
+docker push <region>-docker.pkg.dev/<project>/<repo>/task-orchestration
+gcloud run deploy task-orchestration --image <region>-docker.pkg.dev/<project>/<repo>/task-orchestration --region <region> --allow-unauthenticated
+```
+
+With Cloud Run's "deploy from repository", add the key as a Docker build argument in the build trigger. Setting it only as a runtime variable on the service has no effect.
 
 ## Orchestration framework
 
@@ -42,12 +63,15 @@ Phone / HQ ──────► status changes on tasks
 ```
 
 - **`web/src/lib/orchestration/engine.ts`** — pure functions, no clock/storage: `rootTasks` (registration), `nextTasks` (follow the arrows whose `onStatus` matches the task's new status; idempotent per farmer+step; End creates nothing), `expireTasks` (planned + past validity → expired), `isPendingOnApp` (planned and started). Tests: `node --test src/lib/orchestration/engine.test.ts`.
-- **`web/src/lib/orchestration/routes.ts`** — pure, like the engine: who visits which farmers on which day. `planAssignment` (what assigning would do: visits against capacity, the same farmers' other due tasks, moves, tasks that can't go that day), `assignTasks`, `unassignTasks`, `assignmentsByTask`, `stopLocation`, `distanceKm`. Tests: `node --test src/lib/orchestration/routes.test.ts`.
-- **`web/src/lib/orchestration/store.ts`** — the only place that reads the clock and storage: `registerFarmer`, `submitTask`, `changeStatus`, `refreshTasks`, `assignToRoute`, `removeFromRoute`.
+- **`web/src/lib/orchestration/jobs.ts`** — pure, like the engine: jobs, their lifecycle and the planner. `planJobs` (allocate and order a day's stops across the chosen surveyors), `jobsFromPlan`, `applyJobAction` (assign / unassign / accept / decline / start / close, with the allowed moves), stop edits (`reorderStop`, `moveStop`, `removeStop`, `deleteJob`), `planAddToJob` / `addToJob` / `removeTasks`, `openJobsByTask`, `stopLocation`, `distanceKm`, `routeKm`. Distances are straight-line; a routing service's road distances plug in through the `distance` parameter. Tests: `node --test src/lib/orchestration/jobs.test.ts`.
+- **`web/src/lib/orchestration/store.ts`** — the only place that reads the clock and storage: `registerFarmer`, `submitTask` (also starts an accepted job), `changeStatus`, `refreshTasks`, `createPlannedJobs`, `jobAction`, `addTasksToJob`, `removeTasksFromJobs` and the stop edits. Phase-1 routes in `mati.routes` are converted to jobs on first load.
 - **Task** = one survey for one farmer: `T<n>`, workflow step, survey template, farmer, status, planned start/end, parent task, response.
 - **Trigger** → planned start: immediately = the day the condition was met; after n days; on a date; or n days after a **date answered in the previous survey** (e.g. sowing date + 30; falls back to the condition day if unanswered). A validity start later than that wins; validity end expires the task.
 - **Registration** = filling the workflow's first survey on the phone, nothing else. The farmer's name and village are read from its answers (questions whose column name or title says "name" / "village"; otherwise the first text answer is the name), and their location from the first Map answer, else the first plot boundary's centre.
-- **Route** = one surveyor's visits for one day, published when HQ assigns: one stop per farmer, covering all of that farmer's tasks due that day. Assignment is not a task status; "Assigned to" and "Visit date" on Tasks are read from the routes. A stop is visited at the farmer's registration location, else the village centre from the Villages master (matched by name). A task can be on one route at a time; reassigning moves it.
+- **Job** = one surveyor's visits for one day: one stop per farmer, covering all of that farmer's tasks due that day. Assignment is not a task status; "Job", "Assigned to" and "Visit date" on Tasks are read from the jobs, and a task is on one open job at most. A stop is visited at the farmer's registration location, else the village centre from the Villages master (matched by name).
+- **Job lifecycle** = created (by the planner or HQ; HQ can reorder, move, remove and add stops, or delete it) → assigned (HQ; on the surveyor's phone; HQ can pull it back) → accepted (surveyor; stops locked) → in progress (surveyor taps Start, or submits the first task) → job sheet closed (surveyor at the end of the day, or HQ). Declining (with a reason) sends it back to created. Closing needs a reason for every stop with tasks still planned; those tasks are released and come first in the next plan.
+- **Job workspace** = a job opened on Task planning, full screen like the Deployment map view: the map in the middle (numbered stops, each leg labelled with distance and drive time, a legend; the day's unassigned tasks as grey pins to add), the route as a rim beside it (base → stops → base with the km and minutes between each pair of nodes; tasks of one farmer share a number), and on the right the route info (distance, drive, on site, day effort: 25 km/h straight-line plus 20 minutes per task, `EFFORT` in jobs.ts) and the actions. Changing the surveyor or rearranging the stops (or taking the shortest order) first shows the change in distance and time, then saves. Added tasks go where they add the least distance; a task can move to another surveyor's job that day (or a new job) or be removed. All of this only until the surveyor accepts.
+- **Planner** = for a day: one stop per farmer; most urgent first (earliest end date, then oldest planned start); each stop to the surveyor with visits left whose base village or stops so far are nearest; each job ordered nearest-next from the base, then untangled (2-opt), as a round trip; stops without a location or capacity are listed as unplanned. Surveyors who already have an open job that day are skipped.
 - **Today** is a simulated date, set on the phone simulator (the Tasks page has no date selection), so day-based triggers and expiry can be tried by hand.
 
 ## Open points
@@ -61,12 +85,12 @@ Phone / HQ ──────► status changes on tasks
    - **Farmers who complete the previous step after the draw:** a second draw, or excluded?
    - **Farmers not selected:** the branch simply ends for them, or they follow another arrow?
    - **Audit:** the engine stays pure: draws use a seeded random generator, and the seed, the population snapshot and the selected farmers are stored. Anyone can then re-run the draw and check that the selection was random.
-2. **Route planning and surveyor assignment of pending tasks** (proposal drafted 2026-10-26; phase 1 built 2026-10-26).
-   Pending tasks become a daily visit plan per surveyor: one stop per farmer visit. Oldest first (and closest to expiry) decides what goes into the day's plan, and location decides the visiting order. Assignment is a separate route record, not a task status. Planner: rule-based and in-browser first (straight-line distances, capacity, village coverage), replaceable later by a routing service.
+2. **Route planning and surveyor assignment of pending tasks** (proposal drafted 2026-10-26; phase 1 built 2026-10-26; phase 2 built 2026-10-27 as Task planning).
+   Pending tasks become a daily visit plan per surveyor: one stop per farmer visit. Oldest first (and closest to expiry) decides what goes into the day's plan, and location decides the visiting order. Assignment is a separate job record, not a task status. Planner: rule-based and in-browser first (straight-line distances, capacity, village coverage), replaceable later by a routing service.
    - **Phase 1 (built): data and manual assignment.** Surveyors and Villages masters; farmer location from registration; the Route record; Assign from the Tasks table (ticked rows or the detail sheet); the phone shows the picked surveyor's route for today, then pending tasks on no route. Defaults used: assign per farmer visit; anyone covers any village; at most 8 visits a day unless the surveyor's master says otherwise; stops in the order assigned, most urgent first; the phone shows the route first and other unassigned pending tasks below. Tasks still planned after their visit day show "Missed" and are reassigned by hand.
-   - **Phase 2: automatic planner and Route planning page** (draft routes, map, reorder / move / remove stops, publish).
+   - **Phase 2 (built): Task planning.** Routes became jobs with a lifecycle (job created → assigned → accepted → in progress → job sheet closed); the planner allocates a day's stops across the surveyors HQ picks; the Task planning page shows jobs with a map (Esri imagery, straight lines), stop editing, Assign, and the timeline; the phone accepts / declines, starts and closes job sheets; Tasks gets a Job column, Plan these and Add to job. Defaults used: a created job already has a surveyor; surveyors can decline with a reason; the surveyor closes the job sheet (HQ can too), with a reason per unfinished stop; one day per plan; anyone covers any village, nearest surveyor first, a maximum number of visits per day.
    - **Phase 3: production** (server or routing service, road distances, arrival times, automatic carry-over, progress).
-   Still to decide before phase 2: fixed village or base coverage per surveyor; daily capacity as visits or working hours; planning one day or a week ahead; whether the registration survey must capture a GPS point.
+   Still to decide: fixed village or base coverage per surveyor; daily capacity as visits or working hours; planning a week ahead; whether the registration survey must capture a GPS point; the Google Routes API set-up for road routes and drive times (server-only key, where it lives); minutes on site per survey template instead of one 20-minute default.
 
 ## Legacy (`src/`, Supabase)
 

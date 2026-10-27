@@ -5,24 +5,26 @@
 // and a detail sheet per row where collected tasks are verified and tasks are cancelled with a reason.
 // No date selection: all tasks, paginated, in work-queue order (status level, then oldest planned start first), so
 // pending tasks read oldest first for surveyor assignment. The simulated "today" is set on the Phone simulator.
-// Planned tasks are assigned to a surveyor's route for a day: tick rows → Assign, or Assign in the detail sheet.
+// Planned tasks go on jobs (one surveyor's visits for a day): tick rows → Plan these (Task planning's planner) or
+// Add to job, or Add to job in the detail sheet.
 import * as React from "react";
 import { format } from "date-fns";
+import { useRouter } from "next/navigation";
 import { RowSelectionState } from "@tanstack/react-table";
 import { NavBarType4 } from "@/components/nav-bars/NavBarType4";
 import { useServerTable } from "@/lib/server-table";
 import { Farmer, STATUS, Task } from "@/lib/orchestration/engine";
-import { Route, Surveyor } from "@/lib/orchestration/routes";
+import { Job, Surveyor } from "@/lib/orchestration/jobs";
 import {
-    assignToRoute,
+    addTasksToJob,
     cancelTask,
     changeStatus,
     loadFarmers,
-    loadRoutes,
+    loadJobs,
     loadSurveyors,
     loadToday,
     refreshTasks,
-    removeFromRoute,
+    removeTasksFromJobs,
 } from "@/lib/orchestration/store";
 import { Workflow, loadWorkflows } from "../survey-workflow/workflow-store";
 import { SurveyService } from "../survey-builder/services/survey-service";
@@ -31,7 +33,7 @@ import { TaskFilters, TaskRecord } from "./data/schema";
 import { buildTaskRecords, statusLabel, statusOrder, useTasksDataSource } from "./data/data-source";
 import { UNASSIGNED } from "./data/table-config";
 import { selectColumn, taskColumns } from "./components/columns";
-import { AssignDialog } from "./components/assign-dialog";
+import { AddToJobDialog } from "./components/add-to-job-dialog";
 import { TasksTable } from "./components/data-table";
 import { StatusTab, TasksToolbar, sheetFilters } from "./components/data-table-toolbar";
 import { TaskDetailSheet } from "./components/task-detail-sheet";
@@ -40,15 +42,16 @@ import { FilterDraft, FilterField, TasksFilterSheet, isFilterValueActive } from 
 const ALL = "all";
 
 export default function TasksPage() {
+    const router = useRouter();
     const [today, setToday] = React.useState("");
     const [tasks, setTasks] = React.useState<Task[]>([]);
     const [farmers, setFarmers] = React.useState<Farmer[]>([]);
     const [surveys, setSurveys] = React.useState<SurveyModel[]>([]);
     const [workflows, setWorkflows] = React.useState<Workflow[]>([]);
-    const [routes, setRoutes] = React.useState<Route[]>([]);
+    const [jobs, setJobs] = React.useState<Job[]>([]);
     const [surveyors, setSurveyors] = React.useState<Surveyor[]>([]);
     const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
-    const [assignIds, setAssignIds] = React.useState<string[] | null>(null);
+    const [addIds, setAddIds] = React.useState<string[] | null>(null);
     const [activeTab, setActiveTab] = React.useState<string>(ALL);
     const [selectedId, setSelectedId] = React.useState<string | null>(null);
     const [isSheetOpen, setIsSheetOpen] = React.useState(false);
@@ -61,14 +64,14 @@ export default function TasksPage() {
         setTasks(refreshTasks(t));
         setFarmers(loadFarmers());
         setWorkflows(loadWorkflows());
-        setRoutes(loadRoutes());
+        setJobs(loadJobs());
         setSurveyors(loadSurveyors());
         SurveyService.getAllSurveys().then(setSurveys);
     }, []);
 
     const records = React.useMemo(
-        () => buildTaskRecords(tasks, farmers, surveys, workflows, routes, surveyors),
-        [tasks, farmers, surveys, workflows, routes, surveyors]
+        () => buildTaskRecords(tasks, farmers, surveys, workflows, jobs, surveyors),
+        [tasks, farmers, surveys, workflows, jobs, surveyors]
     );
     const dataSource = useTasksDataSource(records);
     const serverTable = useServerTable<TaskRecord, TaskFilters>({
@@ -97,7 +100,7 @@ export default function TasksPage() {
     }, [activeTab, serverTable]);
 
     // The status column is shown on the All tab only; on a status tab every row has that status.
-    // Checkboxes only where planned tasks are listed (only those can be assigned).
+    // Checkboxes only where planned tasks are listed (only those can go on a job).
     const columns = React.useMemo(() => {
         const all = taskColumns(today);
         const shown = activeTab === ALL ? all : all.filter((c) => (c as { accessorKey?: string }).accessorKey !== "status");
@@ -110,10 +113,10 @@ export default function TasksPage() {
         return Object.keys(rowSelection).filter((id) => rowSelection[id] && planned.has(id));
     }, [records, rowSelection]);
 
-    const assign = (surveyorId: string, date: string) => {
-        if (!assignIds) return;
-        setRoutes(assignToRoute(assignIds, surveyorId, date));
-        setAssignIds(null);
+    const addToJob = (surveyorId: string, date: string) => {
+        if (!addIds) return;
+        setJobs(addTasksToJob(addIds, surveyorId, date));
+        setAddIds(null);
         setRowSelection({});
     };
 
@@ -196,7 +199,7 @@ export default function TasksPage() {
         <NavBarType4
             pageTitle="Tasks"
             activeItemUrl="/layouts/tasks"
-            pageDescription="Every task the survey workflows created: one survey for one farmer. Assign planned tasks to a surveyor's route, verify collected surveys, cancel tasks that are no longer needed, and follow each task back to the survey that created it."
+            pageDescription="Every task the survey workflows created: one survey for one farmer. Plan planned tasks into surveyors' jobs, verify collected surveys, cancel tasks that are no longer needed, and follow each task back to the survey that created it."
         >
             <div className="flex flex-col h-[calc(100vh-64px)] p-6 overflow-hidden min-w-0 w-full">
                 <div className="bg-white dark:bg-zinc-950 flex-1 min-h-0 flex flex-col min-w-0 overflow-hidden w-full">
@@ -212,7 +215,8 @@ export default function TasksPage() {
                                     setActiveTab={handleTabChange}
                                     onOpenFilters={() => openFilters()}
                                     selectedCount={selectedIds.length}
-                                    onAssignSelected={() => setAssignIds(selectedIds)}
+                                    onPlanSelected={() => router.push(`/layouts/task-planning?plan=${selectedIds.join(",")}`)}
+                                    onAddSelected={() => setAddIds(selectedIds)}
                                     onClearSelection={() => setRowSelection({})}
                                 />
                             )}
@@ -258,21 +262,21 @@ export default function TasksPage() {
                     totalCount={serverTable.totalCount}
                     onVerify={() => selectedId && afterAction(changeStatus(selectedId, STATUS.verified, today))}
                     onCancel={(reason) => selectedId && afterAction(cancelTask(selectedId, reason, today))}
-                    onAssign={() => selectedId && setAssignIds([selectedId])}
-                    onUnassign={() => selectedId && setRoutes(removeFromRoute([selectedId]))}
+                    onAddToJob={() => selectedId && setAddIds([selectedId])}
+                    onRemoveFromJob={() => selectedId && setJobs(removeTasksFromJobs([selectedId]))}
                 />
 
-                {assignIds && (
-                    <AssignDialog
-                        key={assignIds.join("|")}
-                        taskIds={assignIds}
+                {addIds && (
+                    <AddToJobDialog
+                        key={addIds.join("|")}
+                        taskIds={addIds}
                         tasks={tasks}
                         records={records}
-                        routes={routes}
+                        jobs={jobs}
                         surveyors={surveyors}
                         today={today}
-                        onClose={() => setAssignIds(null)}
-                        onAssign={assign}
+                        onClose={() => setAddIds(null)}
+                        onAdd={addToJob}
                     />
                 )}
 

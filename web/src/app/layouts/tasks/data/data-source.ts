@@ -7,8 +7,8 @@
 import * as React from "react";
 import type { TableDataSource } from "@/lib/server-table";
 import { useMockTableDataSource } from "@/mocks/server-table";
-import type { Farmer, Task } from "@/lib/orchestration/engine";
-import { Route, Surveyor, assignmentsByTask } from "@/lib/orchestration/routes";
+import { STATUS, type Farmer, type Task } from "@/lib/orchestration/engine";
+import { Job, Surveyor, isEditable, isOpen, lastJobByTask } from "@/lib/orchestration/jobs";
 import type { Workflow } from "@/app/layouts/survey-workflow/workflow-store";
 import { DEFAULT_SURVEY_STATUSES, SurveyModel } from "@/app/layouts/survey-builder/types/survey-schema";
 import { TaskFilters, TaskRecord } from "./schema";
@@ -22,15 +22,15 @@ export function statusOrder(tasks: Task[], surveys: SurveyModel[]): string[] {
     return Array.from(new Set([...DEFAULT_SURVEY_STATUSES, ...surveys.flatMap((s) => s.statuses ?? []), ...tasks.map((t) => t.status)]));
 }
 
-/** Join each task with its farmer, survey template, workflow, parent and route (what a list API would return). */
-export function buildTaskRecords(tasks: Task[], farmers: Farmer[], surveys: SurveyModel[], workflows: Workflow[], routes: Route[], surveyors: Surveyor[]): TaskRecord[] {
+/** Join each task with its farmer, survey template, workflow, parent and job (what a list API would return). */
+export function buildTaskRecords(tasks: Task[], farmers: Farmer[], surveys: SurveyModel[], workflows: Workflow[], jobs: Job[], surveyors: Surveyor[]): TaskRecord[] {
     const statusRank = new Map(statusOrder(tasks, surveys).map((s, i) => [s, i]));
     const farmerById = new Map(farmers.map((f) => [f.id, f]));
     const surveyById = new Map(surveys.map((s) => [s.id, s]));
     const workflowById = new Map(workflows.map((w) => [w.id, w]));
     const taskById = new Map(tasks.map((t) => [t.id, t]));
     const surveyorById = new Map(surveyors.map((s) => [s.id, s]));
-    const assignments = assignmentsByTask(routes);
+    const jobRefs = lastJobByTask(jobs);
     return tasks.map((t) => {
         const farmer = farmerById.get(t.farmerId);
         const survey = surveyById.get(t.surveyId);
@@ -38,7 +38,10 @@ export function buildTaskRecords(tasks: Task[], farmers: Farmer[], surveys: Surv
         const parent = t.parentTaskId ? taskById.get(t.parentTaskId) : undefined;
         // The step's trigger status, not the parent's current one (a collected parent may be verified since).
         const onStatus = workflow?.steps.find((s) => s.id === t.stepId)?.onStatus;
-        const assignment = assignments.get(t.id);
+        const ref = jobRefs.get(t.id);
+        // A closed job keeps the tasks it did; a task it left undone is free again (with the reason).
+        const released = ref && !isOpen(ref.job) && t.status === STATUS.planned;
+        const reason = released ? ref.job.stops[ref.stopNo - 1]?.notDoneReason : undefined;
         return {
             id: t.id,
             taskNo: t.taskNo,
@@ -57,14 +60,18 @@ export function buildTaskRecords(tasks: Task[], farmers: Farmer[], surveys: Surv
             parentTaskId: t.parentTaskId,
             updatedAt: t.updatedAt,
             statusComment: t.statusComment,
-            ...(assignment && {
-                surveyorId: assignment.route.surveyorId,
-                assignedTo: surveyorById.get(assignment.route.surveyorId)?.name || "(removed surveyor)",
-                visitDate: assignment.route.date,
-                routeId: assignment.route.id,
-                stopNo: assignment.stopNo,
-                stopCount: assignment.route.stops.length,
+            ...(ref && !released && {
+                surveyorId: ref.job.surveyorId,
+                assignedTo: surveyorById.get(ref.job.surveyorId)?.name || "(removed surveyor)",
+                visitDate: ref.job.date,
+                jobId: ref.job.id,
+                jobCode: `J${ref.job.jobNo}`,
+                jobStatus: ref.job.status,
+                jobEditable: isEditable(ref.job),
+                stopNo: ref.stopNo,
+                stopCount: ref.job.stops.length,
             }),
+            ...(released && { jobNote: `Not done on J${ref.job.jobNo}${reason ? `: ${reason}` : ""}` }),
             queueKey: `${String(statusRank.get(t.status) ?? 99).padStart(2, "0")}|${t.plannedStart}|${String(t.taskNo).padStart(6, "0")}`,
             task: t,
         };

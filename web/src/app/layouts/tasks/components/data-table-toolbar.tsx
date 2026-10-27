@@ -1,10 +1,10 @@
 "use client"
 
 // Tasks toolbar — Deployment's DataTableToolbar (deployment/components/data-table-toolbar.tsx): status tabs with counts on
-// the left; filter button (with count and clear) and column toggle on the right, preceded by "n selected · Assign" while
-// planned rows are ticked. No date selection: the simulated "today" and the simulation reset are on the Phone simulator.
+// the left; filter button (with count and clear) and column toggle on the right, preceded by "n selected · Plan these ·
+// Add to job" while planned rows are ticked. No date selection: the simulated "today" and the reset are on the Phone simulator.
 import { Table } from "@tanstack/react-table"
-import { Eye, Filter, Route as RouteIcon, X } from "lucide-react"
+import { Eye, Filter, Route as RouteIcon, Sparkles, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -42,11 +42,13 @@ interface TasksToolbarProps<TData> {
     setActiveTab: (value: string) => void
     onOpenFilters: () => void
     selectedCount: number
-    onAssignSelected: () => void
+    /** Open Task planning's Plan jobs with the ticked tasks. */
+    onPlanSelected: () => void
+    onAddSelected: () => void
     onClearSelection: () => void
 }
 
-export function TasksToolbar<TData>({ table, tabs, activeTab, setActiveTab, onOpenFilters, selectedCount, onAssignSelected, onClearSelection }: TasksToolbarProps<TData>) {
+export function TasksToolbar<TData>({ table, tabs, activeTab, setActiveTab, onOpenFilters, selectedCount, onPlanSelected, onAddSelected, onClearSelection }: TasksToolbarProps<TData>) {
     const filterCount = sheetFilters(table.getState().columnFilters).length
     const isFiltered = filterCount > 0
     const clearSheetFilters = () => table.setColumnFilters((prev) => prev.filter((f) => typeof f.value === "string"))
@@ -75,9 +77,13 @@ export function TasksToolbar<TData>({ table, tabs, activeTab, setActiveTab, onOp
                 {selectedCount > 0 && (
                     <div className="flex items-center h-10 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/50 pl-3 pr-1 gap-2 shadow-sm">
                         <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 whitespace-nowrap">{selectedCount} selected</span>
-                        <Button size="sm" className="h-8 px-3 text-xs font-bold gap-1.5" onClick={onAssignSelected}>
+                        <Button size="sm" className="h-8 px-3 text-xs font-bold gap-1.5" onClick={onPlanSelected}>
+                            <Sparkles className="h-3.5 w-3.5" />
+                            Plan these
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-8 px-3 text-xs font-bold gap-1.5" onClick={onAddSelected}>
                             <RouteIcon className="h-3.5 w-3.5" />
-                            Assign
+                            Add to job
                         </Button>
                         <Button
                             variant="ghost"

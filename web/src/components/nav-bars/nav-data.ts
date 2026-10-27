@@ -2,6 +2,7 @@
 import {
     LayoutDashboard,
     ListTodo,
+    Route,
     BarChart3,
     History,
     Settings,
@@ -265,6 +266,12 @@ export const data = {
             title: "Tasks",
             url: "/layouts/tasks",
             icon: ListTodo,
+            roles: ["HQ Admin"] as UserRole[],
+        },
+        {
+            title: "Task planning",
+            url: "/layouts/task-planning",
+            icon: Route,
             roles: ["HQ Admin"] as UserRole[],
         },
         {
