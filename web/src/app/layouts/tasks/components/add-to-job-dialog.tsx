@@ -1,8 +1,9 @@
 "use client"
 
-// Assign tasks to a surveyor for a day — styled like the cancel-reason dialog (Deployment's report pop-up). Before saving
-// it shows what the assignment does (routes.ts planAssignment): visits added against the surveyor's daily capacity, the
-// same farmers' other due tasks that come along, tasks moving off another route, and tasks that can't go on that day.
+// Add tasks to a surveyor's job for a day — styled like the cancel-reason dialog (Deployment's report pop-up). Before
+// saving it shows what happens (jobs.ts planAddToJob): visits added against the surveyor's daily capacity, a new created
+// job when they have none that day, the same farmers' other due tasks that come along, tasks moving off another job,
+// and tasks that can't go (not due that day, or on a job the surveyor already accepted).
 import * as React from "react"
 import { Route as RouteIcon, X } from "lucide-react"
 
@@ -12,30 +13,31 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { STATUS, Task } from "@/lib/orchestration/engine"
-import { Route, SkipReason, Surveyor, planAssignment, routeFor } from "@/lib/orchestration/routes"
+import { JOB_STATUS, JOB_STATUS_NAME, Job, SkipReason, Surveyor, openJobFor, openJobsByTask, planAddToJob } from "@/lib/orchestration/jobs"
 import { cn } from "@/lib/utils"
 import { TaskRecord } from "../data/schema"
 import { formatYmd } from "./columns"
 
-interface AssignDialogProps {
+interface AddToJobDialogProps {
     taskIds: string[]
     tasks: Task[]
     records: TaskRecord[]
-    routes: Route[]
+    jobs: Job[]
     surveyors: Surveyor[]
     today: string
     onClose: () => void
-    onAssign: (surveyorId: string, date: string) => void
+    onAdd: (surveyorId: string, date: string) => void
 }
 
 /** Mounted only while open (the page renders it with a key), so its defaults are worked out once per opening. */
-export function AssignDialog({ taskIds, tasks, records, routes, surveyors, today, onClose, onAssign }: AssignDialogProps) {
+export function AddToJobDialog({ taskIds, tasks, records, jobs, surveyors, today, onClose, onAdd }: AddToJobDialogProps) {
     const recordById = React.useMemo(() => new Map(records.map((r) => [r.id, r])), [records])
     const active = surveyors.filter((s) => s.active)
 
     // Defaults: the surveyor the selected tasks are already with (when it's one), and today or the earliest start after it.
     const [surveyorId, setSurveyorId] = React.useState(() => {
-        const current = new Set(taskIds.map((id) => recordById.get(id)?.surveyorId))
+        const held = openJobsByTask(jobs)
+        const current = new Set(taskIds.map((id) => held.get(id)?.job.surveyorId))
         const only = current.size === 1 ? [...current][0] : undefined
         return only && active.some((s) => s.id === only) ? only : ""
     })
@@ -46,9 +48,9 @@ export function AssignDialog({ taskIds, tasks, records, routes, surveyors, today
     })
 
     const surveyor = active.find((s) => s.id === surveyorId)
-    const plan = surveyor ? planAssignment({ routes, tasks, taskIds, surveyorId, date, maxVisits: surveyor.maxVisitsPerDay }) : null
-    const onRoute = new Set(surveyor ? routeFor(routes, surveyor.id, date)?.stops.flatMap((s) => s.taskIds) ?? [] : [])
-    const newTaskIds = plan?.taskIds.filter((id) => !onRoute.has(id)) ?? []
+    const plan = surveyor ? planAddToJob({ jobs, tasks, taskIds, surveyorId, date, maxVisits: surveyor.maxVisitsPerDay }) : null
+    const onTarget = new Set(plan?.target?.stops.flatMap((s) => s.taskIds) ?? [])
+    const newTaskIds = plan?.taskIds.filter((id) => !onTarget.has(id)) ?? []
     const surveyorName = (id: string) => surveyors.find((s) => s.id === id)?.name ?? "another surveyor"
 
     const farmerCount = new Set(taskIds.map((id) => recordById.get(id)?.farmerId)).size
@@ -57,10 +59,12 @@ export function AssignDialog({ taskIds, tasks, records, routes, surveyors, today
         const r = recordById.get(id)
         if (reason === "not-started") return `${code(id)} starts ${formatYmd(r!.plannedStart)}`
         if (reason === "ended") return `${code(id)} ended ${formatYmd(r!.plannedEnd!)}`
+        if (reason === "locked") return `${code(id)} is on ${r?.jobCode ?? "a job"}, already accepted`
         return `${code(id)} is ${r?.status ?? "not planned"}`
     }
-    const visitsOn = (s: Surveyor) => routeFor(routes, s.id, date)?.stops.length ?? 0
-    const canAssign = Boolean(plan && !plan.overCapacity && newTaskIds.length > 0 && date)
+    const jobOn = (s: Surveyor) => openJobFor(jobs, s.id, date)
+    const canAdd = Boolean(plan && !plan.locked && !plan.overCapacity && newTaskIds.length > 0 && date)
+    const target = plan?.target
 
     return (
         <Dialog open onOpenChange={(next) => !next && onClose()}>
@@ -68,10 +72,10 @@ export function AssignDialog({ taskIds, tasks, records, routes, surveyors, today
                 <div className="bg-white dark:bg-zinc-950">
                     <div className="p-6 pb-0 flex items-start justify-between">
                         <div className="space-y-1">
-                            <DialogTitle className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Assign to a surveyor</DialogTitle>
+                            <DialogTitle className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Add to a job</DialogTitle>
                             <DialogDescription className="text-sm text-muted-foreground leading-relaxed">
-                                {taskIds.length} {taskIds.length === 1 ? "task" : "tasks"} for {farmerCount} {farmerCount === 1 ? "farmer" : "farmers"}. Each farmer is one
-                                visit on the surveyor&apos;s route for the day, covering all of that farmer&apos;s tasks due then.
+                                {taskIds.length} {taskIds.length === 1 ? "task" : "tasks"} for {farmerCount} {farmerCount === 1 ? "farmer" : "farmers"}. A job is one surveyor&apos;s
+                                visits for a day; each farmer is one stop, covering all of that farmer&apos;s tasks due then.
                             </DialogDescription>
                         </div>
                         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-50" onClick={onClose}>
@@ -87,7 +91,7 @@ export function AssignDialog({ taskIds, tasks, records, routes, surveyors, today
                                 <a href="/layouts/masters" className="font-semibold underline underline-offset-2">
                                     Masters → Surveyors
                                 </a>
-                                , then come back to assign.
+                                , then come back.
                             </p>
                         </div>
                     ) : (
@@ -100,22 +104,25 @@ export function AssignDialog({ taskIds, tasks, records, routes, surveyors, today
                                             <SelectValue placeholder="Select a surveyor" />
                                         </SelectTrigger>
                                         <SelectContent className="z-[600]">
-                                            {active.map((s) => (
-                                                <SelectItem key={s.id} value={s.id} className="text-sm">
-                                                    {s.name}
-                                                    <span className="ml-2 text-xs text-zinc-400">
-                                                        {visitsOn(s)} / {s.maxVisitsPerDay} visits
-                                                    </span>
-                                                </SelectItem>
-                                            ))}
+                                            {active.map((s) => {
+                                                const job = jobOn(s)
+                                                return (
+                                                    <SelectItem key={s.id} value={s.id} className="text-sm">
+                                                        {s.name}
+                                                        <span className="ml-2 text-xs text-zinc-400">
+                                                            {job ? `J${job.jobNo} · ${job.stops.length}/${s.maxVisitsPerDay}` : `no job · 0/${s.maxVisitsPerDay}`}
+                                                        </span>
+                                                    </SelectItem>
+                                                )
+                                            })}
                                         </SelectContent>
                                     </Select>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="assign-date" className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-                                        Visit date
+                                    <Label htmlFor="job-date" className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                                        Job date
                                     </Label>
-                                    <Input id="assign-date" type="date" min={today} value={date} onChange={(e) => setDate(e.target.value)} className="h-9 text-sm" />
+                                    <Input id="job-date" type="date" min={today} value={date} onChange={(e) => setDate(e.target.value)} className="h-9 text-sm" />
                                 </div>
                             </div>
 
@@ -123,34 +130,42 @@ export function AssignDialog({ taskIds, tasks, records, routes, surveyors, today
                                 <div
                                     className={cn(
                                         "rounded-lg border p-3 text-xs space-y-1.5 leading-relaxed",
-                                        plan.overCapacity
+                                        plan.locked || plan.overCapacity
                                             ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50"
                                             : "bg-zinc-50 text-zinc-700 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-800"
                                     )}
                                 >
-                                    {plan.overCapacity ? (
+                                    {plan.locked && target ? (
                                         <p className="font-semibold">
-                                            That makes {plan.visitsAfter} visits on {formatYmd(date)}; {surveyor.name} can make at most {surveyor.maxVisitsPerDay} a day. Pick
-                                            fewer farmers, another surveyor or another day.
+                                            J{target.jobNo} ({surveyor.name}, {formatYmd(date)}) is already {target.status === JOB_STATUS.accepted ? "accepted" : "in progress"}: its stops can&apos;t
+                                            change. Pick another surveyor or day.
+                                        </p>
+                                    ) : plan.overCapacity ? (
+                                        <p className="font-semibold">
+                                            That makes {plan.visitsAfter} visits on {formatYmd(date)}; {surveyor.name} can make at most {surveyor.maxVisitsPerDay} a day. Pick fewer
+                                            farmers, another surveyor or another day.
                                         </p>
                                     ) : plan.taskIds.length === 0 ? (
-                                        <p className="font-semibold">None of these tasks can be visited on {formatYmd(date)}.</p>
+                                        <p className="font-semibold">None of these tasks can go on a job on {formatYmd(date)}.</p>
                                     ) : newTaskIds.length === 0 ? (
-                                        <p className="font-semibold">Already on {surveyor.name}&apos;s route for {formatYmd(date)}.</p>
-                                    ) : (
+                                        <p className="font-semibold">Already on J{target?.jobNo}.</p>
+                                    ) : target ? (
                                         <p className="font-semibold">
                                             {plan.visitsAfter > plan.visitsBefore
-                                                ? `Adds ${plan.visitsAfter - plan.visitsBefore} ${plan.visitsAfter - plan.visitsBefore === 1 ? "visit" : "visits"}`
-                                                : "Adds the tasks to visits already"}{" "}
-                                            on {surveyor.name}&apos;s route for {formatYmd(date)}: {plan.visitsAfter} of {surveyor.maxVisitsPerDay} visits.
+                                                ? `Adds ${plan.visitsAfter - plan.visitsBefore} ${plan.visitsAfter - plan.visitsBefore === 1 ? "visit" : "visits"} to`
+                                                : "Adds the tasks to visits already on"}{" "}
+                                            J{target.jobNo} ({JOB_STATUS_NAME[target.status].toLowerCase()}): {plan.visitsAfter} of {surveyor.maxVisitsPerDay} visits.
+                                            {target.status === JOB_STATUS.assigned && " The surveyor sees the change before accepting."}
+                                        </p>
+                                    ) : (
+                                        <p className="font-semibold">
+                                            Creates a job for {surveyor.name} on {formatYmd(date)} with {plan.visitsAfter} {plan.visitsAfter === 1 ? "visit" : "visits"}. It starts as created:
+                                            assign it on Task planning to send it to the phone.
                                         </p>
                                     )}
                                     {plan.added.length > 0 && <p>Also adds {plan.added.map(code).join(", ")}: same farmer, due that day.</p>}
                                     {plan.moved.length > 0 && (
-                                        <p>
-                                            Moves{" "}
-                                            {plan.moved.map((m) => `${code(m.taskId)} off ${surveyorName(m.from.surveyorId)}'s route for ${formatYmd(m.from.date)}`).join("; ")}.
-                                        </p>
+                                        <p>Moves {plan.moved.map((m) => `${code(m.taskId)} off J${m.from.jobNo} (${surveyorName(m.from.surveyorId)})`).join("; ")}.</p>
                                     )}
                                     {plan.skipped.length > 0 && <p>Left out: {plan.skipped.map((s) => skipText(s.taskId, s.reason)).join("; ")}.</p>}
                                 </div>
@@ -162,9 +177,9 @@ export function AssignDialog({ taskIds, tasks, records, routes, surveyors, today
                         <Button variant="outline" className="h-9 px-4 text-xs font-bold" onClick={onClose}>
                             Cancel
                         </Button>
-                        <Button className="h-9 px-4 text-xs font-bold" disabled={!canAssign} onClick={() => onAssign(surveyorId, date)}>
+                        <Button className="h-9 px-4 text-xs font-bold" disabled={!canAdd} onClick={() => onAdd(surveyorId, date)}>
                             <RouteIcon className="mr-2 h-3.5 w-3.5" />
-                            Assign {newTaskIds.length > 0 ? `${newTaskIds.length} ${newTaskIds.length === 1 ? "task" : "tasks"}` : ""}
+                            Add {newTaskIds.length > 0 ? `${newTaskIds.length} ${newTaskIds.length === 1 ? "task" : "tasks"}` : ""}
                         </Button>
                     </div>
                 </div>

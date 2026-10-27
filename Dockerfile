@@ -14,6 +14,8 @@ COPY web/ ./
 # Supabase mode is opt-in at build time (the values are public, see README). Leave unset for the browser-only demo.
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
+# Google Maps JavaScript API key for the maps (built into the browser bundle; see web/.env.example). Without it maps show a notice.
+ARG NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 

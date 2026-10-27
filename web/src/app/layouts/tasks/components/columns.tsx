@@ -5,6 +5,7 @@ import { format } from "date-fns"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Checkbox } from "@/components/ui/checkbox"
 import { STATUS } from "@/lib/orchestration/engine"
+import { JOB_STATUS, JOB_STATUS_NAME } from "@/lib/orchestration/jobs"
 import { cn } from "@/lib/utils"
 import { TaskRecord } from "../data/schema"
 import { DataTableColumnHeader } from "./data-table-column-header"
@@ -17,7 +18,7 @@ export const initials = (name: string) => name.trim().split(/\s+/).map((w) => w[
 
 const muted = <span className="text-muted-foreground">-</span>
 
-/** Row checkboxes for assigning planned tasks to a surveyor (only planned rows can be selected). */
+/** Row checkboxes for planning or adding planned tasks to a job (only planned rows can be selected). */
 export const selectColumn: ColumnDef<TaskRecord> = {
     id: "select",
     size: 44,
@@ -100,6 +101,29 @@ export function taskColumns(today: string): ColumnDef<TaskRecord>[] {
             cell: ({ row }) => <TaskStatusBadge status={row.original.status} />,
         },
         {
+            accessorKey: "jobCode",
+            size: 150,
+            meta: { title: "Job" },
+            header: ({ column, table }) => <DataTableColumnHeader column={column} table={table} title="Job" />,
+            cell: ({ row }) => {
+                const { jobCode, jobStatus, jobNote } = row.original
+                if (jobCode && jobStatus)
+                    return (
+                        <div className="flex flex-col leading-tight">
+                            <span className="text-sm font-mono font-semibold">{jobCode}</span>
+                            <span className="text-[10px] text-muted-foreground">{JOB_STATUS_NAME[jobStatus]}</span>
+                        </div>
+                    )
+                if (jobNote)
+                    return (
+                        <span className="text-[11px] font-semibold text-red-600 dark:text-red-400 max-w-[180px] truncate block" title={jobNote}>
+                            {jobNote}
+                        </span>
+                    )
+                return muted
+            },
+        },
+        {
             accessorKey: "assignedTo",
             size: 160,
             meta: { title: "Assigned to" },
@@ -119,15 +143,15 @@ export function taskColumns(today: string): ColumnDef<TaskRecord>[] {
             meta: { title: "Visit date" },
             header: ({ column, table }) => <DataTableColumnHeader column={column} table={table} title="Visit date" />,
             cell: ({ row }) => {
-                const { visitDate, stopNo, stopCount, status } = row.original
+                const { visitDate, stopNo, stopCount, status, jobStatus } = row.original
                 if (!visitDate) return muted
-                // Still planned after its visit day: the surveyor didn't get to it (carry-over is manual for now).
-                const missed = status === STATUS.planned && visitDate < today
+                // Still planned after its job day and the job sheet isn't closed yet.
+                const missed = status === STATUS.planned && visitDate < today && jobStatus !== JOB_STATUS.closed
                 return (
                     <div className="flex flex-col leading-tight">
                         <span className="text-sm">{formatYmd(visitDate)}</span>
                         <span className={cn("text-[10px]", missed ? "font-semibold text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-                            {missed ? "Missed · reassign" : `Stop ${stopNo} of ${stopCount}`}
+                            {missed ? "Past its job day" : `Stop ${stopNo} of ${stopCount}`}
                         </span>
                     </div>
                 )

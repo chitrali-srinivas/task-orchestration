@@ -1,17 +1,38 @@
 /**
- * Orchestration store: farmers, tasks and routes in localStorage, and the actions that run the engine.
- * The engine (engine.ts) and routes (routes.ts) are pure; this file is the only place that reads the clock and storage.
+ * Orchestration store: farmers, tasks and jobs in localStorage, and the actions that run the engine.
+ * The engine (engine.ts) and jobs (jobs.ts) are pure; this file is the only place that reads the clock and storage.
  * Swapping this for Supabase later leaves them untouched.
  */
 
 import { Workflow, loadWorkflows } from "@/app/layouts/survey-workflow/workflow-store";
 import { loadMasterRecords } from "@/app/layouts/survey-builder/lib/master-data-registry";
 import { Farmer, QuestionRef, STATUS, Task, expireTasks, farmerFromResponse, nextTasks, rootTasks } from "./engine";
-import { DEFAULT_MAX_VISITS, Route, Surveyor, Village, assignTasks, unassignTasks } from "./routes";
+import {
+    ActionContext,
+    DEFAULT_MAX_VISITS,
+    JOB_STATUS,
+    Job,
+    JobMove,
+    JobPlan,
+    RouteContext,
+    Surveyor,
+    Village,
+    addToJob,
+    applyJobAction,
+    changeSurveyor,
+    deleteJob,
+    jobsFromPlan,
+    openJobsByTask,
+    removeTasks,
+    setStopOrder,
+    stopLocation,
+} from "./jobs";
 
 const TASKS_KEY = "mati.tasks";
 const FARMERS_KEY = "mati.farmers";
-const ROUTES_KEY = "mati.routes";
+const JOBS_KEY = "mati.jobs";
+/** Phase-1 storage (published routes), converted to jobs on first load. */
+const LEGACY_ROUTES_KEY = "mati.routes";
 const SIM_KEY = "mati.sim";
 
 function read<T>(key: string, fallback: T): T {
@@ -36,8 +57,27 @@ export const loadTasks = () => dedupeIds(read<Task[]>(TASKS_KEY, []));
 export const loadFarmers = () => read<Farmer[]>(FARMERS_KEY, []);
 export const saveTasks = (t: Task[]) => write(TASKS_KEY, t);
 export const saveFarmers = (f: Farmer[]) => write(FARMERS_KEY, f);
-export const loadRoutes = () => read<Route[]>(ROUTES_KEY, []);
-export const saveRoutes = (r: Route[]) => write(ROUTES_KEY, r);
+export const saveJobs = (j: Job[]) => write(JOBS_KEY, j);
+
+export function loadJobs(): Job[] {
+    if (typeof window !== "undefined" && window.localStorage.getItem(JOBS_KEY) === null) {
+        type LegacyRoute = Pick<Job, "id" | "date" | "surveyorId" | "stops" | "createdAt" | "updatedAt"> & { status: "draft" | "published" };
+        const legacy = read<LegacyRoute[]>(LEGACY_ROUTES_KEY, []);
+        if (legacy.length > 0) {
+            // Published routes were on the phone already: they become assigned jobs.
+            saveJobs(
+                legacy.map((r, i) => ({
+                    ...r,
+                    jobNo: i + 1,
+                    status: r.status === "published" ? JOB_STATUS.assigned : JOB_STATUS.created,
+                    history: [{ action: "create", at: r.createdAt, by: "HQ" }, ...(r.status === "published" ? [{ action: "assign" as const, at: r.createdAt, by: "HQ" }] : [])],
+                }))
+            );
+            window.localStorage.removeItem(LEGACY_ROUTES_KEY);
+        }
+    }
+    return read<Job[]>(JOBS_KEY, []);
+}
 
 /** Simulation settings kept by the phone: the simulated "today" and which surveyor the phone belongs to. */
 interface Sim {
@@ -139,9 +179,15 @@ export function registerFarmer(input: { workflow: Workflow; rootStepId: string; 
     return { farmer, tasks };
 }
 
-/** Surveyor submits a pending task from the phone. */
+/** Surveyor submits a pending task from the phone. The first task submitted on an accepted job starts the job. */
 export function submitTask(taskId: string, response: Record<string, unknown>, today: string): Task[] {
-    return changeStatus(taskId, STATUS.collected, today, response);
+    const tasks = changeStatus(taskId, STATUS.collected, today, response);
+    const job = openJobsByTask(loadJobs()).get(taskId)?.job;
+    if (job?.status === JOB_STATUS.accepted) {
+        const by = loadSurveyors().find((s) => s.id === job.surveyorId)?.name ?? "Surveyor";
+        jobAction(job.id, "start", { by, note: "Started with the first submitted task" });
+    }
+    return tasks;
 }
 
 /** HQ sets a status (verified / cancelled / …), optionally with a comment. Follow-on tasks are created by the workflow. */
@@ -166,36 +212,71 @@ function applyStatus(tasks: Task[], workflow: Workflow, taskId: string, status: 
     return [...updated, ...created];
 }
 
+const maxVisitsOf = (surveyorId: string) => loadSurveyors().find((s) => s.id === surveyorId)?.maxVisitsPerDay ?? DEFAULT_MAX_VISITS;
+
+/** Farmer locations and the surveyor's base village, for placing and ordering stops by distance. */
+function routeContext(surveyorId: string): RouteContext {
+    const villages = loadVillages();
+    const farmerById = new Map(loadFarmers().map((f) => [f.id, f]));
+    const base = villages.find((v) => v.id === loadSurveyors().find((s) => s.id === surveyorId)?.baseVillageId)?.centre;
+    return { locate: (farmerId) => stopLocation(farmerById.get(farmerId), villages), base };
+}
+
+const updateJobs = (change: (jobs: Job[], now: string) => Job[]): Job[] => {
+    const next = change(loadJobs(), nowIso());
+    saveJobs(next);
+    return next;
+};
+
+/** HQ creates the planned jobs (status created, for review before they are assigned). */
+export const createPlannedJobs = (plan: JobPlan, date: string) =>
+    updateJobs((jobs, now) => [...jobs, ...jobsFromPlan(jobs, plan, date, newIds("job"), now)]);
+
+/** Move a job along its lifecycle (HQ: assign / unassign / close; surveyor: accept / decline / start / close). */
+export const jobAction = (jobId: string, action: JobMove, ctx: Omit<ActionContext, "now" | "tasks">) =>
+    updateJobs((jobs, now) => applyJobAction(jobs, jobId, action, { ...ctx, now, tasks: loadTasks() }));
+
 /**
- * HQ puts tasks on a surveyor's route for a day (published straight away). The same farmers' other tasks due
- * that day come along, since one visit covers them; over the surveyor's daily capacity nothing changes.
+ * HQ adds tasks to a surveyor's job for a day (a new created job if they have none), or moves them there from
+ * another job. The same farmers' other tasks due that day come along, since one visit covers them; a new stop goes
+ * where it adds the least distance. An accepted job or over capacity: nothing changes.
  */
-export function assignToRoute(taskIds: string[], surveyorId: string, date: string): Route[] {
-    const surveyor = loadSurveyors().find((s) => s.id === surveyorId);
-    const next = assignTasks({
-        routes: loadRoutes(),
-        tasks: loadTasks(),
-        taskIds,
-        surveyorId,
-        date,
-        maxVisits: surveyor?.maxVisitsPerDay ?? DEFAULT_MAX_VISITS,
-        newId: `route_${Date.now()}`,
-        now: nowIso(),
+export const addTasksToJob = (taskIds: string[], surveyorId: string, date: string) =>
+    updateJobs((jobs, now) =>
+        addToJob({
+            jobs,
+            tasks: loadTasks(),
+            taskIds,
+            surveyorId,
+            date,
+            maxVisits: maxVisitsOf(surveyorId),
+            newId: newIds("job")(0),
+            now,
+            by: "HQ",
+            route: routeContext(surveyorId),
+        })
+    );
+
+/** HQ saves a rearranged stop order. */
+export const saveJobOrder = (jobId: string, farmerIds: string[]) => updateJobs((jobs, now) => setStopOrder(jobs, jobId, farmerIds, now));
+
+/** HQ hands a job (not yet accepted) to another surveyor. */
+export const changeJobSurveyor = (jobId: string, surveyorId: string) =>
+    updateJobs((jobs, now) => {
+        const surveyors = loadSurveyors();
+        const from = surveyors.find((s) => s.id === jobs.find((j) => j.id === jobId)?.surveyorId)?.name ?? "removed surveyor";
+        const to = surveyors.find((s) => s.id === surveyorId)?.name ?? "?";
+        return changeSurveyor(jobs, jobId, surveyorId, maxVisitsOf(surveyorId), { now, by: "HQ", note: `From ${from} to ${to}` });
     });
-    saveRoutes(next);
-    return next;
-}
 
-/** HQ takes tasks off their route; they become unassigned again. */
-export function removeFromRoute(taskIds: string[]): Route[] {
-    const next = unassignTasks(loadRoutes(), taskIds, nowIso());
-    saveRoutes(next);
-    return next;
-}
+/** HQ takes tasks off their (not yet accepted) job; they become unassigned again. */
+export const removeTasksFromJobs = (taskIds: string[]) => updateJobs((jobs, now) => removeTasks(jobs, taskIds, now));
 
-/** Wipe simulation data (farmers, tasks and routes), keeping surveys, masters and workflows. */
+export const deleteCreatedJob = (jobId: string) => updateJobs((jobs) => deleteJob(jobs, jobId));
+
+/** Wipe simulation data (farmers, tasks and jobs), keeping surveys, masters and workflows. */
 export function resetSimulation() {
     saveTasks([]);
     saveFarmers([]);
-    saveRoutes([]);
+    saveJobs([]);
 }

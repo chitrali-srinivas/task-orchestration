@@ -12,12 +12,13 @@ import { SurveyModel } from "@/app/layouts/survey-builder/types/survey-schema";
 import { PreviewAllQuestions } from "@/app/layouts/survey-builder/components/preview/preview-runtime";
 import { Workflow } from "@/app/layouts/survey-workflow/workflow-store";
 import { Farmer, LatLng, LocationSource, STATUS, Task, isPendingOnApp } from "@/lib/orchestration/engine";
-import { Route, Surveyor, Village, distanceKm, routeFor, stopLocation } from "@/lib/orchestration/routes";
+import { JOB_STATUS, Job, JobStatus, Surveyor, Village, distanceKm, openJobsByTask, stopLocation, unfinishedStops } from "@/lib/orchestration/jobs";
 import {
     phoneWorkflows,
+    jobAction,
     loadFarmers,
+    loadJobs,
     loadPhoneSurveyor,
-    loadRoutes,
     loadSurveyors,
     loadToday,
     loadVillages,
@@ -32,9 +33,10 @@ import {
 /**
  * Surveyor phone (simulation). Registering a farmer fills the workflow's first survey; the
  * engine then creates the next tasks immediately, and they show up under Pending.
- * "Today" can be moved to see day-based tasks appear and expire; Reset deletes all farmers, tasks and routes.
- * Picking a surveyor shows their route for today (assigned on the HQ Tasks page) as Stop 1, 2, 3…, then the
- * pending tasks on no route. These are the only simulation controls (the HQ Tasks page has no date selection).
+ * "Today" can be moved to see day-based tasks appear and expire; Reset deletes all farmers, tasks and jobs.
+ * Picking a surveyor shows their jobs (assigned on HQ Task planning): accept or decline, start, visit the stops in
+ * order, and close the job sheet with a reason for anything not done; then the pending tasks no job holds.
+ * These are the only simulation controls (the HQ pages have no date selection).
  */
 export default function PhonePage() {
     const [today, setToday] = useState("");
@@ -45,7 +47,7 @@ export default function PhonePage() {
     const [farmers, setFarmers] = useState<Farmer[]>([]);
     const [surveyors, setSurveyors] = useState<Surveyor[]>([]);
     const [surveyorId, setSurveyorId] = useState("");
-    const [routes, setRoutes] = useState<Route[]>([]);
+    const [jobs, setJobs] = useState<Job[]>([]);
     const [villages, setVillages] = useState<Village[]>([]);
 
     useEffect(() => {
@@ -58,7 +60,7 @@ export default function PhonePage() {
         setFarmers(loadFarmers());
         setSurveyors(loadSurveyors());
         setSurveyorId(loadPhoneSurveyor());
-        setRoutes(loadRoutes());
+        setJobs(loadJobs());
         setVillages(loadVillages());
         SurveyService.getAllSurveys().then(setSurveys);
     }, []);
@@ -79,7 +81,7 @@ export default function PhonePage() {
         resetSimulation();
         setTasks([]);
         setFarmers([]);
-        setRoutes([]);
+        setJobs([]);
         setConfirmReset(false);
     };
     const workflow = workflows.find((w) => w.id === workflowId) || null;
@@ -115,7 +117,7 @@ export default function PhonePage() {
                         <Label className="text-xs">Surveyor</Label>
                         {surveyors.length === 0 ? (
                             <p className="text-[11px] text-zinc-500">
-                                No surveyors yet. Add them in <a href="/layouts/masters" className="underline">Masters</a> to see routes.
+                                No surveyors yet. Add them in <a href="/layouts/masters" className="underline">Masters</a> to see their jobs.
                             </p>
                         ) : (
                             <Select value={surveyorId || NO_SURVEYOR} onValueChange={(v) => changeSurveyor(v === NO_SURVEYOR ? "" : v)}>
@@ -131,7 +133,7 @@ export default function PhonePage() {
                     <div className="border-t border-zinc-200 pt-3 dark:border-zinc-800">
                         {confirmReset ? (
                             <div className="space-y-2">
-                                <p className="text-[11px] text-zinc-600 dark:text-zinc-300">Delete all farmers, tasks and routes? Surveys, workflows and masters are kept.</p>
+                                <p className="text-[11px] text-zinc-600 dark:text-zinc-300">Delete all farmers, tasks and jobs? Surveys, workflows and masters are kept.</p>
                                 <div className="flex gap-2">
                                     <Button type="button" variant="outline" size="sm" className="h-7 flex-1 text-[11px]" onClick={() => setConfirmReset(false)}>Keep</Button>
                                     <Button type="button" size="sm" className="h-7 flex-1 bg-rose-600 text-[11px] text-white hover:bg-rose-700" onClick={reset}>Delete all</Button>
@@ -154,9 +156,10 @@ export default function PhonePage() {
                         tasks={tasks}
                         farmers={farmers}
                         surveyor={surveyor}
-                        routes={routes}
+                        jobs={jobs}
                         villageMaster={villages}
                         onTasks={setTasks}
+                        onJobs={setJobs}
                         onFarmers={setFarmers}
                     />
                 </div>
@@ -177,17 +180,26 @@ interface PhoneAppProps {
     tasks: Task[];
     farmers: Farmer[];
     surveyor?: Surveyor;
-    routes: Route[];
+    jobs: Job[];
     /** Villages master (centres), as opposed to the village names farmers were registered with. */
     villageMaster: Village[];
     onTasks: (t: Task[]) => void;
+    onJobs: (j: Job[]) => void;
     onFarmers: (f: Farmer[]) => void;
 }
 
-type Screen = { name: "tasks" } | { name: "farmers" } | { name: "register" } | { name: "task"; task: Task };
+type Screen = { name: "tasks" } | { name: "farmers" } | { name: "register" } | { name: "task"; task: Task } | { name: "close"; jobId: string };
 
-function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, routes, villageMaster, onTasks, onFarmers }: PhoneAppProps) {
+/** Job statuses the surveyor sees (created jobs are still with HQ; closed ones are done). */
+const PHONE_JOB_LABEL: Partial<Record<JobStatus, string>> = {
+    [JOB_STATUS.assigned]: "New job",
+    [JOB_STATUS.accepted]: "Accepted",
+    [JOB_STATUS.inProgress]: "In progress",
+};
+
+function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, jobs, villageMaster, onTasks, onJobs, onFarmers }: PhoneAppProps) {
     const [screen, setScreen] = useState<Screen>({ name: "tasks" });
+    const [declining, setDeclining] = useState<{ jobId: string; reason: string } | null>(null);
     const [village, setVillage] = useState<string>("all");
     const [tab, setTab] = useState<"pending" | "completed">("pending");
 
@@ -196,26 +208,33 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, routes, 
     const villages = Array.from(new Set(farmers.map((f) => f.village).filter(Boolean))).sort();
     const inVillage = (farmerId: string) => village === "all" || farmerById.get(farmerId)?.village === village;
 
-    // With a surveyor picked, Pending is their route for today, then the pending tasks on no route for today or later
-    // (tasks on another surveyor's route, or on a later day, are not theirs to do now).
-    const route = surveyor ? routeFor(routes, surveyor.id, today) : undefined;
-    const routed = new Set(routes.filter((r) => r.status === "published" && r.date >= today).flatMap((r) => r.stops.flatMap((st) => st.taskIds)));
+    // With a surveyor picked, Pending shows their jobs, then the pending tasks no open job holds (tasks on another
+    // surveyor's job, or on a created job HQ hasn't sent yet, are not theirs to do).
+    const held = openJobsByTask(jobs);
+    const myJobs = surveyor
+        ? jobs.filter((j) => j.surveyorId === surveyor.id && PHONE_JOB_LABEL[j.status]).sort((a, b) => a.date.localeCompare(b.date) || a.jobNo - b.jobNo)
+        : [];
     const taskById = new Map(tasks.map((t) => [t.id, t]));
-    // Each leg is measured from the previous stop (the first from the surveyor's base village), straight-line.
     const base: LatLng | undefined = villageMaster.find((v) => v.id === surveyor?.baseVillageId)?.centre;
-    const locations = (route?.stops ?? []).map((stop) => stopLocation(farmerById.get(stop.farmerId), villageMaster));
-    const stops = (route?.stops ?? []).map((stop, i) => {
-        const location = locations[i];
-        const from = i === 0 ? base : locations[i - 1];
-        const km = from && location ? distanceKm(from, location) : undefined;
-        const stopTasks = stop.taskIds.map((id) => taskById.get(id)).filter((t): t is Task => Boolean(t));
-        return { no: i + 1, farmerId: stop.farmerId, tasks: stopTasks, km, source: location?.source, done: stopTasks.every((t) => t.status !== STATUS.planned) };
-    });
-    const routeStops = stops.filter((st) => inVillage(st.farmerId));
-    const routePending = routeStops.flatMap((st) => st.tasks).filter((t) => t.status === STATUS.planned).length;
+    /** A job's stops with their tasks, the leg from the previous stop (the first from the base village) and done-ness. */
+    const stopsOf = (job: Job) => {
+        const locations = job.stops.map((stop) => stopLocation(farmerById.get(stop.farmerId), villageMaster));
+        return job.stops
+            .map((stop, i) => {
+                const from = i === 0 ? base : locations[i - 1];
+                const km = from && locations[i] ? distanceKm(from, locations[i]!) : undefined;
+                const stopTasks = stop.taskIds.map((id) => taskById.get(id)).filter((t): t is Task => Boolean(t));
+                return { no: i + 1, farmerId: stop.farmerId, tasks: stopTasks, km, source: locations[i]?.source, done: stopTasks.every((t) => t.status !== STATUS.planned) };
+            })
+            .filter((st) => inVillage(st.farmerId));
+    };
+    /** The surveyor can open a job's tasks once it is accepted (or started) and its day has come. */
+    const workable = (job: Job) => (job.status === JOB_STATUS.accepted || job.status === JOB_STATUS.inProgress) && job.date <= today;
+    const jobPending = myJobs.filter(workable).flatMap((j) => stopsOf(j).flatMap((st) => st.tasks)).filter((t) => isPendingOnApp(t, today)).length;
+    const act = (jobId: string, action: "accept" | "decline" | "start", note?: string) => onJobs(jobAction(jobId, action, { by: surveyor?.name ?? "Surveyor", note }));
 
     const pending = tasks
-        .filter((t) => isPendingOnApp(t, today) && inVillage(t.farmerId) && !(surveyor && routed.has(t.id)))
+        .filter((t) => isPendingOnApp(t, today) && inVillage(t.farmerId) && !(surveyor && held.has(t.id)))
         .sort((a, b) => a.taskNo - b.taskNo);
     const completed = tasks.filter((t) => t.status !== STATUS.planned && t.status !== STATUS.expired && inVillage(t.farmerId)).sort((a, b) => b.taskNo - a.taskNo);
 
@@ -282,45 +301,114 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, routes, 
         );
     };
 
-    const routeSection = surveyor && (
-        <div className="space-y-2">
+    const jobsSection = surveyor && (
+        <div className="space-y-3">
             <div className="flex items-baseline justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">Today&apos;s route</span>
-                {route && <span className="font-mono text-[10px] text-zinc-400">{route.stops.length} {route.stops.length === 1 ? "stop" : "stops"}</span>}
+                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-500">My jobs</span>
+                <span className="font-mono text-[10px] text-zinc-400">{myJobs.length}</span>
             </div>
-            {!route ? (
+            {myJobs.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-zinc-300 p-3 text-center text-[11px] text-zinc-400 dark:border-zinc-700">
-                    No route for {surveyor.name} today. HQ assigns tasks on the Tasks page.
+                    No jobs for {surveyor.name}. HQ assigns them on Task planning.
                 </p>
-            ) : routeStops.length === 0 ? (
-                <p className="py-2 text-center text-[11px] text-zinc-400">No stops in this village.</p>
             ) : (
-                routeStops.map((st) => {
-                    const farmer = farmerById.get(st.farmerId);
+                myJobs.map((job) => {
+                    const stops = stopsOf(job);
+                    const open = workable(job);
+                    const taskTotal = job.stops.reduce((n, st) => n + st.taskIds.length, 0);
                     return (
-                        <div key={st.farmerId} className={cn("space-y-2 rounded-lg border border-zinc-200 p-2 dark:border-zinc-800", st.done && "opacity-60")}>
-                            <div className="flex items-start justify-between gap-2 px-1">
+                        <div key={job.id} className="space-y-2 rounded-xl border border-zinc-300 p-2.5 dark:border-zinc-700">
+                            <div className="flex items-start justify-between gap-2 px-0.5">
                                 <div className="min-w-0">
-                                    <div className="truncate text-xs font-bold">Stop {st.no} · {farmer?.name || "?"}</div>
-                                    <div className="truncate text-[10px] text-zinc-500">{farmer?.village || "No village"}</div>
+                                    <div className="text-xs font-bold">
+                                        J{job.jobNo} · {job.date}
+                                        {job.date === today && <span className="text-sky-600"> · Today</span>}
+                                    </div>
+                                    <div className="text-[10px] text-zinc-500">
+                                        {job.stops.length} {job.stops.length === 1 ? "stop" : "stops"} · {taskTotal} {taskTotal === 1 ? "task" : "tasks"}
+                                    </div>
                                 </div>
-                                <div className="shrink-0 text-right font-mono text-[10px] text-zinc-500">
-                                    {st.done ? (
-                                        <span className="font-semibold text-emerald-600">Done</span>
-                                    ) : (
-                                        <>
-                                            {st.km !== undefined && <div>{st.km.toFixed(1)} km</div>}
-                                            <div>{st.source ? LOCATION_LABEL[st.source] : "No location"}</div>
-                                        </>
-                                    )}
-                                </div>
+                                <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold dark:bg-zinc-800">{PHONE_JOB_LABEL[job.status]}</span>
                             </div>
-                            {st.tasks.map(taskCard)}
+
+                            {job.status === JOB_STATUS.assigned &&
+                                (declining?.jobId === job.id ? (
+                                    <div className="space-y-1.5">
+                                        <Input
+                                            autoFocus
+                                            placeholder="Why can't you take this job?"
+                                            value={declining.reason}
+                                            onChange={(e) => setDeclining({ jobId: job.id, reason: e.target.value })}
+                                            className="h-8 text-xs"
+                                        />
+                                        <div className="flex gap-2">
+                                            <Button type="button" variant="outline" size="sm" className="h-7 flex-1 text-[11px]" onClick={() => setDeclining(null)}>Back</Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                className="h-7 flex-1 bg-rose-600 text-[11px] text-white hover:bg-rose-700"
+                                                disabled={!declining.reason.trim()}
+                                                onClick={() => {
+                                                    act(job.id, "decline", declining.reason);
+                                                    setDeclining(null);
+                                                }}
+                                            >
+                                                Decline job
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-2">
+                                        <Button type="button" variant="outline" size="sm" className="h-8 flex-1 text-xs" onClick={() => setDeclining({ jobId: job.id, reason: "" })}>Decline</Button>
+                                        <Button type="button" size="sm" className="h-8 flex-1 text-xs" onClick={() => act(job.id, "accept")}>Accept</Button>
+                                    </div>
+                                ))}
+                            {job.status === JOB_STATUS.accepted &&
+                                (job.date <= today ? (
+                                    <Button type="button" size="sm" className="h-8 w-full text-xs" onClick={() => act(job.id, "start")}>Start job</Button>
+                                ) : (
+                                    <p className="px-0.5 text-[10px] text-zinc-500">Starts on {job.date}.</p>
+                                ))}
+
+                            {stops.length === 0 && <p className="py-1 text-center text-[11px] text-zinc-400">No stops in this village.</p>}
+                            {stops.map((st) => {
+                                const farmer = farmerById.get(st.farmerId);
+                                return (
+                                    <div key={st.farmerId} className={cn("space-y-2 rounded-lg border border-zinc-200 p-2 dark:border-zinc-800", st.done && "opacity-60")}>
+                                        <div className="flex items-start justify-between gap-2 px-1">
+                                            <div className="min-w-0">
+                                                <div className="truncate text-xs font-bold">Stop {st.no} · {farmer?.name || "?"}</div>
+                                                <div className="truncate text-[10px] text-zinc-500">
+                                                    {farmer?.village || "No village"}
+                                                    {!open && ` · ${st.tasks.map((t) => `T${t.taskNo}`).join(", ")}`}
+                                                </div>
+                                            </div>
+                                            <div className="shrink-0 text-right font-mono text-[10px] text-zinc-500">
+                                                {st.done ? (
+                                                    <span className="font-semibold text-emerald-600">Done</span>
+                                                ) : (
+                                                    <>
+                                                        {st.km !== undefined && <div>{st.km.toFixed(1)} km</div>}
+                                                        <div>{st.source ? LOCATION_LABEL[st.source] : "No location"}</div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {open && st.tasks.map(taskCard)}
+                                    </div>
+                                );
+                            })}
+
+                            {open && (
+                                <Button type="button" variant="outline" size="sm" className="h-8 w-full text-xs" onClick={() => setScreen({ name: "close", jobId: job.id })}>
+                                    Close job sheet
+                                </Button>
+                            )}
                         </div>
                     );
                 })
             )}
-            <div className="pt-2 text-[11px] font-bold uppercase tracking-wider text-zinc-500">Other pending tasks</div>
+            <div className="pt-1 text-[11px] font-bold uppercase tracking-wider text-zinc-500">Other pending tasks</div>
         </div>
     );
 
@@ -335,8 +423,26 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, routes, 
                 onBack={() => setScreen({ name: "tasks" })}
                 onSubmit={(answers) => {
                     onTasks(submitTask(screen.task.id, answers, today));
+                    onJobs(loadJobs()); // the first task submitted on an accepted job starts it
                     setScreen({ name: "tasks" });
-                    setTab("completed");
+                }}
+            />
+        );
+    }
+
+    if (screen.name === "close") {
+        const job = jobs.find((j) => j.id === screen.jobId);
+        return (
+            <CloseJobSheetScreen
+                job={job}
+                unfinished={job ? unfinishedStops(job, tasks) : []}
+                farmerName={(id) => farmerById.get(id)?.name || "?"}
+                taskLabel={(id) => (taskById.get(id) ? `T${taskById.get(id)!.taskNo}` : "?")}
+                isPlanned={(id) => taskById.get(id)?.status === STATUS.planned}
+                onBack={() => setScreen({ name: "tasks" })}
+                onConfirm={(reasons) => {
+                    if (job) onJobs(jobAction(job.id, "close", { by: surveyor?.name ?? "Surveyor", reasons }));
+                    setScreen({ name: "tasks" });
                 }}
             />
         );
@@ -401,13 +507,13 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, routes, 
                 <div className="mt-2 flex gap-4 border-b border-zinc-200 text-xs dark:border-zinc-800">
                     {(["pending", "completed"] as const).map((k) => (
                         <button key={k} type="button" onClick={() => setTab(k)} className={cn("-mb-px border-b-2 pb-1.5 capitalize", tab === k ? "border-zinc-900 font-semibold dark:border-zinc-100" : "border-transparent text-zinc-400")}>
-                            {k} <span className="font-mono text-[10px]">{k === "pending" ? pending.length + routePending : completed.length}</span>
+                            {k} <span className="font-mono text-[10px]">{k === "pending" ? pending.length + jobPending : completed.length}</span>
                         </button>
                     ))}
                 </div>
                 <div className="mt-3 space-y-2">
                     {tab === "pending" && startCard}
-                    {tab === "pending" && routeSection}
+                    {tab === "pending" && jobsSection}
                     {(tab === "pending" ? pending : completed).length === 0 ? (
                         <p className={cn("text-center text-xs text-zinc-400", surveyor && tab === "pending" ? "py-3" : "py-8")}>
                             {tab === "pending" ? (surveyor ? "No other pending tasks." : "No pending tasks.") : "Nothing completed yet."}
@@ -418,6 +524,61 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, routes, 
                 </div>
             </div>
             {nav}
+        </div>
+    );
+}
+
+/* ------------------------------ Close job sheet ------------------------------ */
+
+function CloseJobSheetScreen({ job, unfinished, farmerName, taskLabel, isPlanned, onBack, onConfirm }: {
+    job?: Job;
+    unfinished: number[];
+    farmerName: (farmerId: string) => string;
+    taskLabel: (taskId: string) => string;
+    isPlanned: (taskId: string) => boolean;
+    onBack: () => void;
+    onConfirm: (reasons: Record<number, string>) => void;
+}) {
+    const [reasons, setReasons] = useState<Record<number, string>>({});
+    const complete = unfinished.every((i) => reasons[i]?.trim());
+    return (
+        <div className="flex h-full flex-col">
+            <div className="flex items-center gap-2 border-b border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
+                <button type="button" onClick={onBack} className="rounded p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"><ArrowLeft className="h-4 w-4" /></button>
+                <div className="min-w-0">
+                    <div className="truncate text-xs font-bold">Close job sheet{job ? ` · J${job.jobNo}` : ""}</div>
+                    <div className="truncate text-[10px] text-zinc-500">{job?.date}</div>
+                </div>
+            </div>
+            <div className="flex-1 space-y-3 overflow-y-auto p-4">
+                {!job ? (
+                    <p className="text-center text-xs text-rose-600">Job not found.</p>
+                ) : (
+                    <>
+                        <p className="text-[11px] text-zinc-600 dark:text-zinc-300">
+                            {job.stops.length - unfinished.length} of {job.stops.length} stops done.
+                            {unfinished.length > 0 && " Say why each remaining stop wasn't done. Its tasks go back to HQ for the next plan."}
+                        </p>
+                        {unfinished.map((i) => (
+                            <div key={i} className="space-y-1 rounded-lg bg-zinc-100 p-2.5 dark:bg-zinc-900">
+                                <div className="text-xs font-semibold">Stop {i + 1} · {farmerName(job.stops[i].farmerId)}</div>
+                                <div className="text-[10px] text-zinc-500">{job.stops[i].taskIds.filter(isPlanned).map(taskLabel).join(", ")} not done</div>
+                                <Input
+                                    placeholder="Reason (e.g. farmer away)"
+                                    value={reasons[i] ?? ""}
+                                    onChange={(e) => setReasons((r) => ({ ...r, [i]: e.target.value }))}
+                                    className="h-8 bg-white text-xs dark:bg-zinc-950"
+                                />
+                            </div>
+                        ))}
+                    </>
+                )}
+            </div>
+            <div className="border-t border-zinc-200 p-3 dark:border-zinc-800">
+                <Button type="button" className="h-9 w-full text-xs" disabled={!job || !complete} onClick={() => onConfirm(reasons)}>
+                    Close job sheet
+                </Button>
+            </div>
         </div>
     );
 }

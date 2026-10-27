@@ -80,7 +80,7 @@ export const MASTER_DEFINITIONS: Omit<MasterSetDefinition, "sampleRecords">[] = 
     {
         id: "surveyors",
         name: "Surveyors",
-        description: "Field surveyors that pending tasks are assigned to. For now anyone can cover any village; a day's route holds at most \"Max visits per day\" farmer visits (8 when empty).",
+        description: "Field surveyors that pending tasks are assigned to. For now anyone can cover any village; a day's job holds at most \"Max visits per day\" farmer visits (8 when empty).",
         category: "People",
         displayFieldKey: "surveyorName",
         fields: [

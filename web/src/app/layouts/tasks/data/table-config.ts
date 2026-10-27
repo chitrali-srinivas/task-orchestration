@@ -30,7 +30,7 @@ const dateField = (field: (row: TaskRecord) => string | undefined) =>
 
 export const taskOrigin = (row: TaskRecord) => (row.parentTaskId ? "follow-up" : "registration");
 
-/** "Assigned to" filter option for tasks on no published route. */
+/** "Assigned to" filter option for tasks on no job. */
 export const UNASSIGNED = "unassigned";
 
 export function createTasksTableConfig(dataset: TaskRecord[]): TableConfig<TaskRecord, TaskFilters> {
@@ -51,6 +51,7 @@ export function createTasksTableConfig(dataset: TaskRecord[]): TableConfig<TaskR
             plannedStart: dateField((row) => row.plannedStart),
             plannedEnd: dateField((row) => row.plannedEnd),
             assignedTo: textOrOptions((row) => row.assignedTo, (row) => row.surveyorId ?? UNASSIGNED),
+            jobCode: (row, value) => typeof value !== "string" || includes(row.jobCode, value),
             visitDate: dateField((row) => row.visitDate),
         },
         calculateSummaryCounts: (rows) => {

@@ -1,9 +1,9 @@
 "use client"
 
 // Task detail — Deployment's detail sheet (deployment/components/engagement-detail-sheet.tsx) for one task: farmer header,
-// details bar, the task's dates, route assignment and lineage, the survey response, and a footer with the previous / next
-// pager and the HQ actions (assign planned tasks to a surveyor, verify, cancel). Cancelling asks for a reason, as
-// Deployment's Report asks for a comment. No map yet: the route map comes with the Route planning page.
+// details bar, the task's dates, job and lineage, the survey response, and a footer with the previous / next pager and
+// the HQ actions (add a planned task to a job, verify, cancel). Cancelling asks for a reason, as Deployment's Report asks
+// for a comment. The job's route map is on Task planning (the Job link opens it).
 import * as React from "react"
 import { format } from "date-fns"
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Inbox, MapPin, Route as RouteIcon, X } from "lucide-react"
@@ -16,6 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import { STATUS } from "@/lib/orchestration/engine"
+import { JOB_STATUS_NAME } from "@/lib/orchestration/jobs"
 import { cn } from "@/lib/utils"
 import type { QuestionModel, SurveyModel } from "@/app/layouts/survey-builder/types/survey-schema"
 import { TaskRecord } from "../data/schema"
@@ -110,8 +111,8 @@ interface TaskDetailSheetProps {
     totalCount: number
     onVerify: () => void
     onCancel: (reason: string) => void
-    onAssign: () => void
-    onUnassign: () => void
+    onAddToJob: () => void
+    onRemoveFromJob: () => void
 }
 
 export function TaskDetailSheet({
@@ -130,8 +131,8 @@ export function TaskDetailSheet({
     totalCount,
     onVerify,
     onCancel,
-    onAssign,
-    onUnassign,
+    onAddToJob,
+    onRemoveFromJob,
 }: TaskDetailSheetProps) {
     const [cancelOpen, setCancelOpen] = React.useState(false)
     const [reason, setReason] = React.useState("")
@@ -153,7 +154,9 @@ export function TaskDetailSheet({
     if (!record) return null
     const canVerify = record.status === STATUS.collected
     const canCancel = record.status === STATUS.collected || record.status === STATUS.planned
-    const canAssign = record.status === STATUS.planned
+    const isPlanned = record.status === STATUS.planned
+    // A planned task can go on a job, or move to another, until the surveyor accepts the job it is on.
+    const canAddToJob = isPlanned && (!record.jobId || record.jobEditable)
     const answeredCount = answers.filter((a) => a.answer.kind !== "empty").length
 
     const submitCancel = () => {
@@ -226,9 +229,16 @@ export function TaskDetailSheet({
                                         )}
                                     </Detail>
                                     <Detail label="Last updated">{format(new Date(record.updatedAt), "dd MMM yy, hh:mm a").toUpperCase()}</Detail>
-                                    <Detail label="Assigned to">
-                                        {record.assignedTo ?? <span className="text-zinc-500">{canAssign ? "Unassigned" : "-"}</span>}
+                                    <Detail label="Job">
+                                        {record.jobId && record.jobStatus ? (
+                                            <a href={`/layouts/task-planning?job=${record.jobId}`} className="font-medium underline-offset-2 hover:underline">
+                                                <span className="font-mono">{record.jobCode}</span> · {JOB_STATUS_NAME[record.jobStatus]}
+                                            </a>
+                                        ) : (
+                                            <span className="text-zinc-500">{isPlanned ? "Not on a job" : "-"}</span>
+                                        )}
                                     </Detail>
+                                    <Detail label="Assigned to">{record.assignedTo ?? <span className="text-zinc-500">-</span>}</Detail>
                                     <Detail label="Visit">
                                         {record.visitDate ? (
                                             <>
@@ -240,10 +250,19 @@ export function TaskDetailSheet({
                                         )}
                                     </Detail>
                                 </div>
-                                {canAssign && record.routeId && (
-                                    <button type="button" className="text-xs font-medium text-zinc-500 underline-offset-2 hover:text-zinc-900 hover:underline dark:hover:text-zinc-100" onClick={onUnassign}>
-                                        Remove from {record.assignedTo}&apos;s route
+                                {canAddToJob && record.jobId && (
+                                    <button type="button" className="text-xs font-medium text-zinc-500 underline-offset-2 hover:text-zinc-900 hover:underline dark:hover:text-zinc-100" onClick={onRemoveFromJob}>
+                                        Remove from {record.jobCode}
                                     </button>
+                                )}
+                                {isPlanned && record.jobId && !record.jobEditable && (
+                                    <p className="text-xs text-zinc-500">The surveyor accepted {record.jobCode}, so it stays there until its job sheet is closed.</p>
+                                )}
+                                {record.jobNote && (
+                                    <div className="rounded-lg border p-3 text-xs space-y-1 bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50">
+                                        <div className="font-bold uppercase tracking-wider text-[10px]">Back from a closed job</div>
+                                        <p className="leading-relaxed">{record.jobNote}</p>
+                                    </div>
                                 )}
                                 {record.statusComment && (
                                     <div
@@ -345,13 +364,13 @@ export function TaskDetailSheet({
                                     Cancel task
                                 </Button>
                             )}
-                            {canAssign && (
+                            {canAddToJob && (
                                 <Button
                                     className="h-9 px-5 text-xs font-bold shadow-md transition-all active:scale-[0.98] bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-900"
-                                    onClick={onAssign}
+                                    onClick={onAddToJob}
                                 >
                                     <RouteIcon className="mr-2 h-3.5 w-3.5" />
-                                    {record.routeId ? "Reassign" : "Assign"}
+                                    {record.jobId ? "Move to another job" : "Add to job"}
                                 </Button>
                             )}
                             {canVerify && (

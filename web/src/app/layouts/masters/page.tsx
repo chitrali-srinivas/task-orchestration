@@ -34,7 +34,7 @@ import {
 /**
  * Masters: define Supplier info, Fleet, Villages and Surveyors records.
  * Anything entered here is what the survey builder's "Master Data" option source
- * and the phone preview use; Surveyors and Villages also feed task assignment (routes).
+ * and the phone preview use; Surveyors and Villages also feed Task planning (jobs).
  */
 export default function MastersPage() {
     return (
