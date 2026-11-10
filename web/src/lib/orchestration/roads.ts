@@ -89,6 +89,39 @@ export function toRoadRoute(json: ComputeRoutesResponse): RoadRoute | undefined 
     return { legs, km: (route.distanceMeters ?? 0) / 1000, minutes: Math.round(durationSeconds(route.duration) / 60) };
 }
 
+/* ------------------------------ Walking from the road ------------------------------ */
+
+/** Walking pace from the road to a farm and back. Fields have no mapped paths, so walks are measured straight-line. */
+export const WALK_KMH = 4.5;
+export const walkMinutes = (km: number) => Math.round((km / WALK_KMH) * 60);
+/** Gaps shorter than this are the road snapping to the point, not a walk. */
+export const MIN_WALK_KM = 0.03;
+
+export interface Walk {
+    /** Index of the stop in the route's nodes. */
+    node: number;
+    /** Road point where the bike stops → the stop → road point where the next leg starts. */
+    path: LatLng[];
+    km: number;
+    minutes: number;
+}
+
+/**
+ * The walks a road route leaves at each stop. Google's legs end and start at the nearest road point, so the stretch
+ * from the road to a farm in the fields, and back to the road, is on foot. With a base, the first and last nodes are
+ * the base village and get no walk.
+ */
+export function stopWalks(nodes: LatLng[], route: RoadRoute, distance: (a: LatLng, b: LatLng) => number, hasBase: boolean): Walk[] {
+    return nodes.flatMap((node, i) => {
+        if (hasBase && (i === 0 || i === nodes.length - 1)) return [];
+        const arrive = route.legs[i - 1]?.path.at(-1);
+        const leave = route.legs[i]?.path[0];
+        const km = (arrive ? distance(arrive, node) : 0) + (leave ? distance(node, leave) : 0);
+        if (km < MIN_WALK_KM) return [];
+        return [{ node: i, path: [...(arrive ? [arrive] : []), node, ...(leave ? [leave] : [])], km, minutes: walkMinutes(km) }];
+    });
+}
+
 /** Cache key for a node sequence (5 decimals, about a metre), and back. */
 export const routeKey = (nodes: LatLng[]) => nodes.map((p) => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join("|");
 export const nodesFromKey = (key: string): LatLng[] =>

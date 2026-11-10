@@ -4,7 +4,7 @@
 // web/.env.example); the loader uses the same id and libraries as the repo's other Google maps so they share one script.
 // Shows the base village and the numbered stops joined in visiting order and back to the base (the road route from the
 // Routes API when it's in, straight dashed lines otherwise), each leg labelled with its distance and drive time, the day's
-// unassigned tasks as grey pins
+// unassigned tasks as grey pins; amber dots where the surveyor walks from the road to a stop the bike can't reach
 // and, when ticked, other jobs' stops; clicking a pin offers to add it to this job. Without a key it shows how to set
 // one; the task list and the route info work either way.
 import * as React from "react"
@@ -56,6 +56,8 @@ interface JobMapProps {
     legs: MapLeg[]
     /** The road route from Google, base to base; straight dashed lines between the nodes without it. */
     roadPath?: LatLng[]
+    /** On-foot stretches from the road to stops the bike can't reach (and back), drawn as dots. */
+    walks?: LatLng[][]
     candidates: MapCandidate[]
     activeKey?: string | null
     onSelectStop: (key: string) => void
@@ -83,7 +85,7 @@ export function JobMap(props: JobMapProps) {
     return <GoogleJobMap {...props} />
 }
 
-function GoogleJobMap({ base, stops, legs, roadPath, candidates, activeKey, onSelectStop, onPickCandidate }: JobMapProps) {
+function GoogleJobMap({ base, stops, legs, roadPath, walks = [], candidates, activeKey, onSelectStop, onPickCandidate }: JobMapProps) {
     const { isLoaded, loadError } = useJsApiLoader({ id: "google-map-script", googleMapsApiKey: env.googleMapsApiKey, libraries: LIBRARIES })
     const [map, setMap] = React.useState<google.maps.Map | null>(null)
     const [openKey, setOpenKey] = React.useState<string | null>(null)
@@ -143,6 +145,17 @@ function GoogleJobMap({ base, stops, legs, roadPath, candidates, activeKey, onSe
                     <PolylineF path={roadPath} options={{ strokeColor: "#3b82f6", strokeOpacity: 1, strokeWeight: 4, zIndex: 2 }} />
                 </>
             )}
+            {walks.map((walk, i) => (
+                <PolylineF
+                    key={`walk-${i}`}
+                    path={walk}
+                    options={{
+                        strokeOpacity: 0,
+                        zIndex: 3,
+                        icons: [{ icon: { path: google.maps.SymbolPath.CIRCLE, scale: 2.5, fillColor: "#fbbf24", fillOpacity: 1, strokeColor: "#78350f", strokeWeight: 0.5 }, offset: "0", repeat: "9px" }],
+                    }}
+                />
+            ))}
             {!roadPath && path.length > 1 && (
                 <PolylineF
                     path={path}

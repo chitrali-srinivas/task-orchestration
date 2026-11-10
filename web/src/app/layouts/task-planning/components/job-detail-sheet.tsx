@@ -41,7 +41,7 @@ import {
     unfinishedStops,
     visitableOn,
 } from "@/lib/orchestration/jobs"
-import type { RoadRoute } from "@/lib/orchestration/roads"
+import { WALK_KMH, stopWalks, type RoadRoute } from "@/lib/orchestration/roads"
 import type { SurveyModel } from "@/app/layouts/survey-builder/types/survey-schema"
 import { cn } from "@/lib/utils"
 import { JobRecord } from "../data/schema"
@@ -262,16 +262,25 @@ function JobWorkspace({
     const shownRoute = readyRoute(road)
     const savedRoute = draftOrder ? readyRoute(savedRoad) : shownRoute
     const pendingRoute = readyRoute(pendingRoad)
-    const totals = (route: RoadRoute | undefined, straight: JobEffort) =>
+    // Google drives to the nearest road point; a farm off the road is reached on foot, and back to the bike.
+    const walksOf = (route: RoadRoute | undefined, points: LatLng[], from?: LatLng) => (route ? stopWalks(points, route, distanceKm, Boolean(from)) : [])
+    const walkMinOf = (route: RoadRoute | undefined, points: LatLng[], from?: LatLng) => walksOf(route, points, from).reduce((sum, w) => sum + w.minutes, 0)
+    const shownWalks = walksOf(shownRoute, nodes.map((n) => n.at), base)
+    const walkByKey = new Map(shownWalks.map((w) => [nodes[w.node].key, w]))
+    const pendingBase = pendingSurveyor ? baseOf(pendingSurveyor, villages) : undefined
+    const savedWalkMin = walkMinOf(savedRoute, routePoints(job.stops, base), base)
+    const shownWalkMin = shownWalks.reduce((sum, w) => sum + w.minutes, 0)
+    const pendingWalkMin = walkMinOf(pendingRoute, routePoints(job.stops, pendingBase), pendingBase)
+    const totals = (route: RoadRoute | undefined, straight: JobEffort, walkMin = 0) =>
         route
-            ? { km: route.km as number | undefined, driveMin: route.minutes, onSiteMin: straight.onSiteMin, totalMin: route.minutes + straight.onSiteMin }
-            : { km: straight.km, driveMin: straight.driveMin, onSiteMin: straight.onSiteMin, totalMin: straight.totalMin }
-    /** Two orders compared on the same basis: by road when both road routes are in, by straight-line estimate otherwise. */
-    const compare = (a: RoadRoute | undefined, aStraight: JobEffort, b: RoadRoute | undefined, bStraight: JobEffort) =>
+            ? { km: route.km as number | undefined, driveMin: route.minutes, walkMin, onSiteMin: straight.onSiteMin, totalMin: route.minutes + walkMin + straight.onSiteMin }
+            : { km: straight.km, driveMin: straight.driveMin, walkMin: 0, onSiteMin: straight.onSiteMin, totalMin: straight.totalMin }
+    /** Two orders compared on the same basis: by road (with walking) when both road routes are in, by straight-line estimate otherwise. */
+    const compare = (a: RoadRoute | undefined, aStraight: JobEffort, aWalk: number, b: RoadRoute | undefined, bStraight: JobEffort, bWalk: number) =>
         a && b
-            ? { from: totals(a, aStraight), to: totals(b, bStraight), basis: "by road" }
+            ? { from: totals(a, aStraight, aWalk), to: totals(b, bStraight, bWalk), basis: "by road" }
             : { from: totals(undefined, aStraight), to: totals(undefined, bStraight), basis: "straight-line estimate" }
-    const shownTotals = totals(shownRoute, effort)
+    const shownTotals = totals(shownRoute, effort, shownWalkMin)
     const deltaProps = (c: ReturnType<typeof compare>) => ({ fromKm: c.from.km, toKm: c.to.km, fromMin: c.from.totalMin, toMin: c.to.totalMin, basis: c.basis })
     const roadNote =
         road.status === "ready"
@@ -403,6 +412,7 @@ function JobWorkspace({
                             stops={mapStops}
                             legs={legs}
                             roadPath={shownRoute?.legs.flatMap((l) => l.path)}
+                            walks={shownWalks.map((w) => w.path)}
                             candidates={candidates}
                             activeKey={activeKey}
                             onSelectStop={selectStop}
@@ -424,6 +434,16 @@ function JobWorkspace({
                                     {shownRoute ? <span className="h-1 w-4 rounded bg-blue-500" /> : <span className="w-4 border-t-2 border-dashed border-zinc-500" />}
                                     {shownRoute ? "Road route" : "Straight line between stops"}
                                 </div>
+                                {shownRoute && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="flex w-4 justify-between">
+                                            <span className="h-1 w-1 rounded-full bg-amber-400" />
+                                            <span className="h-1 w-1 rounded-full bg-amber-400" />
+                                            <span className="h-1 w-1 rounded-full bg-amber-400" />
+                                        </span>
+                                        On foot from the road (and back)
+                                    </div>
+                                )}
                                 <div className="flex items-center gap-2">
                                     <span className="rounded-full border border-zinc-200 bg-white px-1.5 text-[9px] font-semibold text-zinc-800">4.6 km · 11 min</span> Leg distance · drive
                                 </div>
@@ -490,6 +510,11 @@ function JobWorkspace({
                                                                 {farmer?.village || "No village"} · {located[i] ? LOCATION_LABEL[located[i]!.source] : <span className="text-amber-600">no location</span>} ·{" "}
                                                                 {stop.taskIds.length * EFFORT.minutesPerTask} min on site
                                                             </div>
+                                                            {walkByKey.get(key) && (
+                                                                <div className="truncate text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                                                                    On foot from the road: {formatKm(walkByKey.get(key)!.km)} · {walkByKey.get(key)!.minutes} min there and back
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         {draftOrder && (
                                                             <div className="flex shrink-0 flex-col">
@@ -631,12 +656,18 @@ function JobWorkspace({
                                 <div className="grid grid-cols-2 gap-2">
                                     <Stat label={shownRoute ? "Distance · road" : "Distance · straight-line"} value={shownTotals.km === undefined ? "-" : formatKm(shownTotals.km)} />
                                     <Stat label="Day effort" value={formatMinutes(shownTotals.totalMin)} />
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
                                     <Stat label={shownRoute ? "Drive · Google" : "Drive · estimate"} value={formatMinutes(shownTotals.driveMin)} />
+                                    <Stat label="Walk" value={shownRoute ? formatMinutes(shownTotals.walkMin) : "-"} />
                                     <Stat label="On site" value={formatMinutes(shownTotals.onSiteMin)} />
                                 </div>
                                 <p className="text-[10px] text-zinc-400">
                                     Round trip from the base village.{" "}
-                                    {shownRoute ? "Road distance and drive time from Google, without traffic" : `Straight-line at ${EFFORT.driveKmh} km/h until the road route is in`}; {EFFORT.minutesPerTask} min per task on site.
+                                    {shownRoute
+                                        ? `Road distance and drive time from Google, without traffic; walking from the road to stops off it, there and back, at ${WALK_KMH} km/h`
+                                        : `Straight-line at ${EFFORT.driveKmh} km/h until the road route is in`}
+                                    ; {EFFORT.minutesPerTask} min per task on site.
                                     {record.unlocatedCount > 0 && ` ${record.unlocatedCount} stop${record.unlocatedCount === 1 ? " has" : "s have"} no location and ${record.unlocatedCount === 1 ? "isn't" : "aren't"} in the distance.`}
                                 </p>
                             </div>
@@ -672,7 +703,7 @@ function JobWorkspace({
                                                     {pendingSurveyor.name} starts from{" "}
                                                     {villages.find((v) => v.id === pendingSurveyor.baseVillageId)?.name ? `base ${villages.find((v) => v.id === pendingSurveyor.baseVillageId)?.name}` : "no base village"}.
                                                 </p>
-                                                <Delta {...deltaProps(compare(savedRoute, savedEffort, pendingRoute, pendingEffort))} />
+                                                <Delta {...deltaProps(compare(savedRoute, savedEffort, savedWalkMin, pendingRoute, pendingEffort, pendingWalkMin))} />
                                                 <div className="flex gap-2">
                                                     <Button variant="outline" size="sm" className="h-8 flex-1 text-xs" onClick={() => setPending(null)}>
                                                         Keep {surveyor?.name ?? "current"}
@@ -698,7 +729,7 @@ function JobWorkspace({
                                             {draftOrder ? (
                                                 <div className="space-y-2 rounded-lg border border-sky-200 dark:border-sky-900/50 bg-sky-50/50 dark:bg-sky-950/20 p-3">
                                                     <p className="text-xs text-zinc-700 dark:text-zinc-300">Move stops with the arrows in the route list.</p>
-                                                    <Delta {...deltaProps(compare(savedRoute, savedEffort, shownRoute, effort))} />
+                                                    <Delta {...deltaProps(compare(savedRoute, savedEffort, savedWalkMin, shownRoute, effort, shownWalkMin))} />
                                                     <div className="flex gap-2">
                                                         <Button variant="outline" size="sm" className="h-8 flex-1 text-xs" onClick={() => setDraft(null)}>
                                                             Discard
