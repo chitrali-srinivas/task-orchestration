@@ -30,7 +30,8 @@ export function NavMain({
     activeItemUrl,
     onItemClick
 }: {
-    label: string
+    /** Group heading; leave it out for a group without one. */
+    label?: string
     items: NavItem[]
     activeItemUrl?: string
     onItemClick?: (url: string) => void
@@ -39,7 +40,7 @@ export function NavMain({
 
     return (
         <SidebarGroup>
-            <SidebarGroupLabel>{label}</SidebarGroupLabel>
+            {label && <SidebarGroupLabel>{label}</SidebarGroupLabel>}
             <SidebarMenu>
                 {items.map((item, index) => {
                     const isParentActive = item.url === activeItemUrl;

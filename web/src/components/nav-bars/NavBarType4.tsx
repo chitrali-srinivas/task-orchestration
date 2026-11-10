@@ -403,14 +403,16 @@ function AppSidebar({
                 </SidebarMenu>
             </SidebarHeader>
             <SidebarContent className="bg-white scrollbar-minimal">
-                <NavMain items={navMain} label="Verifier" activeItemUrl={activeItemUrl} onItemClick={onItemClick} />
-                
+                {navMain && navMain.length > 0 && (
+                    <NavMain items={navMain} label="Verifier" activeItemUrl={activeItemUrl} onItemClick={onItemClick} />
+                )}
+
                 {admin && admin.length > 0 && (
                     <NavMain items={admin} label="Admin" activeItemUrl={activeItemUrl} onItemClick={onItemClick} />
                 )}
 
                 {hqAdmin && hqAdmin.length > 0 && (
-                    <NavMain items={hqAdmin} label="HQ Admin" activeItemUrl={activeItemUrl} onItemClick={onItemClick} />
+                    <NavMain items={hqAdmin} activeItemUrl={activeItemUrl} onItemClick={onItemClick} />
                 )}
             </SidebarContent>
             <SidebarFooter className="bg-white p-0">

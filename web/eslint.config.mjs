@@ -11,15 +11,8 @@ const PORT_BOUND_FILES = [
   "src/lib/server-table/**",
   "src/lib/utils.ts",
   "src/hooks/**",
-  "src/types/**",
-  "src/app/layouts/engagement/**",
   "src/app/layouts/deployment/**",
-  "src/app/layouts/samples/**",
-  "src/components/data-inspector/**",
   "src/app/layouts/season-management/**",
-  "src/app/layouts/survey-builder-simplified/**",
-  "src/app/components/filter/components/**",
-  "src/app/components/survey/SurveyComponents.tsx",
 ];
 const PROTOTYPE_WIRING_FILES = ["**/data/data-source.ts", "**/data/table-config.ts", "**/data/mock-data.ts"];
 
