@@ -1,6 +1,6 @@
 "use client"
 
-// Task planning — the filter sheet, copied from Tasks (tasks/components/tasks-filter-sheet.tsx), itself copied from Samples
+// Plans — the filter sheet, copied from Tasks (tasks/components/tasks-filter-sheet.tsx), itself copied from Samples
 // (samples/components/samples-filter-sheet.tsx), which draws Deployment's
 // filter look from a field list: a right Sheet, one section per field, searchable multi-select popovers, From / To date
 // pickers, Reset all / Apply now. The sheet edits a draft; the table filters change only on Apply. Options are

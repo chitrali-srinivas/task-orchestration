@@ -1,4 +1,4 @@
-// PROTOTYPE-ONLY — mock server rules for the Task planning table (in-memory search/filter/count logic).
+// PROTOTYPE-ONLY — mock server rules for the Plans table (in-memory search/filter/count logic).
 // In production this behaviour is implemented by the backend; see data/api-contract.ts.
 import { format } from "date-fns";
 import type { TableConfig } from "@/mocks/server-table";

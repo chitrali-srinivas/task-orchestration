@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ChevronDown, ListTodo, RotateCcw, UserPlus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,7 @@ import {
  * Surveyor phone (simulation). Registering a farmer fills the workflow's first survey; the
  * engine then creates the next tasks immediately, and they show up under Pending.
  * "Today" can be moved to see day-based tasks appear and expire; Reset deletes all farmers, tasks and jobs.
- * Picking a surveyor shows their jobs (assigned on HQ Task planning): accept or decline, start, visit the stops in
+ * Picking a surveyor shows their jobs (assigned on the HQ Plans page): accept or decline, start, visit the stops in
  * order, and close the job sheet with a reason for anything not done; then the pending tasks no job holds.
  * These are the only simulation controls (the HQ pages have no date selection).
  */
@@ -117,7 +118,7 @@ export default function PhonePage() {
                         <Label className="text-xs">Surveyor</Label>
                         {surveyors.length === 0 ? (
                             <p className="text-[11px] text-zinc-500">
-                                No surveyors yet. Add them in <a href="/layouts/masters" className="underline">Masters</a> to see their jobs.
+                                No surveyors yet. Add users with the Surveyor role in <Link href="/layouts/masters/users" className="underline">Masters - Users</Link> to see their jobs.
                             </p>
                         ) : (
                             <Select value={surveyorId || NO_SURVEYOR} onValueChange={(v) => changeSurveyor(v === NO_SURVEYOR ? "" : v)}>
@@ -309,7 +310,7 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, jobs, vi
             </div>
             {myJobs.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-zinc-300 p-3 text-center text-[11px] text-zinc-400 dark:border-zinc-700">
-                    No jobs for {surveyor.name}. HQ assigns them on Task planning.
+                    No jobs for {surveyor.name}. HQ assigns them on the Plans page.
                 </p>
             ) : (
                 myJobs.map((job) => {

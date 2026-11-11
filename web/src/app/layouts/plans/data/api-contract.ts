@@ -3,7 +3,7 @@
 import type { TableApiContract } from "@/lib/server-table/contract";
 
 export const jobsApiContract: TableApiContract = {
-    feature: "task-planning",
+    feature: "plans",
     endpoint: null,
     source: "PROPOSED — no production endpoint; data comes from web/src/lib/orchestration/store.ts (localStorage)",
     pagination: "page",

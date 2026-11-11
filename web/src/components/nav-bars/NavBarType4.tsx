@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useSearchParams } from "next/navigation"
-import { data } from "./nav-data"
+import { data, type NavSection } from "./nav-data"
 import {
     ChevronRight,
     ChevronDown,
@@ -121,18 +121,12 @@ function NavBarType4Content({ children, pageTitle, initialActiveItemUrl, pageDes
         setActiveItemUrl(url)
     }
 
-    const filteredNavMain = filterItems(data.navMain)
-    const filteredAdmin = filterItems(data.admin)
-    const filteredHqVerifier = filterItems(data.hqVerifier || [])
-    const filteredHqAdmin = filterItems(data.hqAdmin || [])
+    const sections = data.sections.map((section) => ({ ...section, items: filterItems(section.items) }))
 
     return (
         <SidebarProvider>
             <AppSidebar 
-                navMain={filteredNavMain} 
-                admin={filteredAdmin} 
-                hqVerifier={filteredHqVerifier}
-                hqAdmin={filteredHqAdmin}
+                sections={sections}
                 activeItemUrl={activeItemUrl}
                 onItemClick={updateActiveItem}
                 isFranchiseOpen={isFranchiseOpen}
@@ -222,20 +216,14 @@ function NavBarType4Content({ children, pageTitle, initialActiveItemUrl, pageDes
 }
 
 function AppSidebar({ 
-    navMain, 
-    admin, 
-    hqVerifier,
-    hqAdmin,
+    sections,
     activeItemUrl,
     onItemClick,
     isFranchiseOpen,
     setIsFranchiseOpen,
     ...props 
 }: React.ComponentProps<typeof Sidebar> & { 
-    navMain: any[], 
-    admin: any[],
-    hqVerifier: any[],
-    hqAdmin: any[],
+    sections: NavSection[],
     activeItemUrl?: string,
     onItemClick?: (url: string) => void,
     isFranchiseOpen: boolean,
@@ -403,16 +391,10 @@ function AppSidebar({
                 </SidebarMenu>
             </SidebarHeader>
             <SidebarContent className="bg-white scrollbar-minimal">
-                {navMain && navMain.length > 0 && (
-                    <NavMain items={navMain} label="Verifier" activeItemUrl={activeItemUrl} onItemClick={onItemClick} />
-                )}
-
-                {admin && admin.length > 0 && (
-                    <NavMain items={admin} label="Admin" activeItemUrl={activeItemUrl} onItemClick={onItemClick} />
-                )}
-
-                {hqAdmin && hqAdmin.length > 0 && (
-                    <NavMain items={hqAdmin} activeItemUrl={activeItemUrl} onItemClick={onItemClick} />
+                {sections.map((section, i) =>
+                    section.items.length > 0 ? (
+                        <NavMain key={section.label ?? i} items={section.items} label={section.label} activeItemUrl={activeItemUrl} onItemClick={onItemClick} />
+                    ) : null
                 )}
             </SidebarContent>
             <SidebarFooter className="bg-white p-0">

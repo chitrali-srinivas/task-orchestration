@@ -1,6 +1,6 @@
 "use client";
 
-// Task planning — HQ turns pending tasks into jobs, built like the Deployment page (layouts/deployment): job status tabs
+// Plans — HQ turns pending tasks into jobs, built like the Deployment page (layouts/deployment): job status tabs
 // with counts, filter sheet, column toggle, server-driven table (useServerTable + data/data-source.ts) and a detail sheet
 // per job. A job is one surveyor's visits for one day. "Plan jobs" picks the day, the active surveyors and the farmers;
 // the planner (lib/orchestration/jobs.ts) allocates and orders the stops. Lifecycle: created → assigned (HQ) → accepted
@@ -172,8 +172,8 @@ export default function TaskPlanningPage() {
 
     return (
         <NavBarType4
-            pageTitle="Task planning"
-            activeItemUrl="/layouts/task-planning"
+            pageTitle="Plans"
+            activeItemUrl="/layouts/plans"
             pageDescription="Turn pending tasks into jobs: one surveyor's visits for one day, in visiting order. Plan jobs, review and assign them; surveyors accept, start and close their job sheets on the phone."
         >
             <div className="flex flex-col h-[calc(100vh-64px)] p-6 overflow-hidden min-w-0 w-full">

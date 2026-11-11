@@ -5,6 +5,7 @@
 // job when they have none that day, the same farmers' other due tasks that come along, tasks moving off another job,
 // and tasks that can't go (not due that day, or on a job the surveyor already accepted).
 import * as React from "react"
+import Link from "next/link"
 import { Route as RouteIcon, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -88,9 +89,9 @@ export function AddToJobDialog({ taskIds, tasks, records, jobs, surveyors, today
                             <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">No surveyors yet</p>
                             <p className="text-xs text-zinc-500">
                                 Add them on{" "}
-                                <a href="/layouts/masters" className="font-semibold underline underline-offset-2">
-                                    Masters → Surveyors
-                                </a>
+                                <Link href="/layouts/masters/users" className="font-semibold underline underline-offset-2">
+                                    Masters - Users (role Surveyor)
+                                </Link>
                                 , then come back.
                             </p>
                         </div>
@@ -160,7 +161,7 @@ export function AddToJobDialog({ taskIds, tasks, records, jobs, surveyors, today
                                     ) : (
                                         <p className="font-semibold">
                                             Creates a job for {surveyor.name} on {formatYmd(date)} with {plan.visitsAfter} {plan.visitsAfter === 1 ? "visit" : "visits"}. It starts as created:
-                                            assign it on Task planning to send it to the phone.
+                                            assign it on the Plans page to send it to the phone.
                                         </p>
                                     )}
                                     {plan.added.length > 0 && <p>Also adds {plan.added.map(code).join(", ")}: same farmer, due that day.</p>}

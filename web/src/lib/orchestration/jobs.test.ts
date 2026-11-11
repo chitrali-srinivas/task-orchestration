@@ -7,6 +7,7 @@ import {
     applyJobAction,
     changeSurveyor,
     cheapestPosition,
+    dayStart,
     deleteJob,
     distanceKm,
     jobEffort,
@@ -154,6 +155,19 @@ test("planner: nearby farmers go to the nearest surveyor; no location is unplann
 
     const created = jobsFromPlan([], p, "2026-10-27", (i) => `j${i}`, "now");
     assert.deepEqual(created.map((j) => [j.jobNo, j.status, j.history[0].by]), [[1, "created", "Planner"], [2, "created", "Planner"]]);
+});
+
+test("day start: home when set, else the base village centre, else none; the planner measures from it", () => {
+    const atHome = { ...surveyor("east", "ve"), home: { lat: 21, lng: 77.0 } };
+    assert.deepEqual(dayStart(atHome, villages), { at: { lat: 21, lng: 77.0 }, kind: "home", label: "home" });
+    assert.deepEqual(dayStart(surveyor("east", "ve"), villages), { at: { lat: 21, lng: 77.2 }, kind: "base", label: "base East" });
+    assert.equal(dayStart(surveyor("x", "nowhere"), villages), undefined);
+    assert.equal(dayStart(undefined, villages), undefined);
+
+    // East's surveyor lives in the west: the western farmers now go to them, and the eastern ones to the other.
+    const p = plan({ surveyors: [surveyor("west", "ve"), atHome] });
+    assert.deepEqual(p.jobs.map((j) => [j.surveyorId, j.stops.map((s) => s.farmerId)]), [["west", ["b", "d"]], ["east", ["a", "c"]]]);
+    assert.equal(p.jobs[1].km, 0); // both farmers at the home point
 });
 
 test("planner: capacity leaves the least urgent stops unplanned; busy surveyors and held tasks are skipped", () => {

@@ -1,4 +1,4 @@
-// PORT-BOUND — one row of the Task planning table: a job joined with its surveyor, farmers and tasks.
+// PORT-BOUND — one row of the Plans table: a job joined with its surveyor, farmers and tasks.
 // Flat fields (jobCode, surveyorName, villages, …) are what the table sorts, searches and filters on.
 import type { Job, JobStatus } from "@/lib/orchestration/jobs";
 
