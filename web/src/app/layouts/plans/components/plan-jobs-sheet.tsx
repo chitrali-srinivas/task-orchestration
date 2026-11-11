@@ -5,6 +5,7 @@
 // on the Tasks page). Preview: what the planner proposes (jobs.ts planJobs), one job per surveyor in visiting order,
 // plus what it left out and why. "Create jobs" saves them as created, for review before they are assigned.
 import * as React from "react"
+import Link from "next/link"
 import { ArrowLeft, Search, Sparkles, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -14,7 +15,7 @@ import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { STATUS, type Farmer, type LatLng, type Task } from "@/lib/orchestration/engine"
-import { Job, JobPlan, Surveyor, UnplannedReason, Village, byUrgency, distanceKm, openJobFor, openJobsByTask, planJobs, stopLocation, visitableOn } from "@/lib/orchestration/jobs"
+import { Job, JobPlan, Surveyor, UnplannedReason, Village, byUrgency, dayStart, distanceKm, openJobFor, openJobsByTask, planJobs, stopLocation, visitableOn } from "@/lib/orchestration/jobs"
 import { cn } from "@/lib/utils"
 import { baseOf } from "../data/data-source"
 import { formatKm, formatYmd } from "./columns"
@@ -138,16 +139,16 @@ export function PlanJobsSheet({ today, jobs, tasks, farmers, surveyors, villages
                                 {active.length === 0 ? (
                                     <p className="rounded-lg border border-dashed border-zinc-200 dark:border-zinc-800 p-4 text-center text-xs text-zinc-500">
                                         No active surveyors. Add them on{" "}
-                                        <a href="/layouts/masters" className="font-semibold underline underline-offset-2">
-                                            Masters → Surveyors
-                                        </a>
+                                        <Link href="/layouts/masters/users" className="font-semibold underline underline-offset-2">
+                                            Masters - Users (role Surveyor)
+                                        </Link>
                                         .
                                     </p>
                                 ) : (
                                     <div className="divide-y divide-zinc-100 dark:divide-zinc-800 rounded-lg border border-zinc-100 dark:border-zinc-800">
                                         {active.map((s) => {
                                             const busy = busyJob(s)
-                                            const baseName = villages.find((v) => v.id === s.baseVillageId)?.name
+                                            const start = dayStart(s, villages)
                                             return (
                                                 <label key={s.id} className={cn("flex items-center gap-3 px-3 py-2.5", busy ? "opacity-60" : "cursor-pointer hover:bg-muted/50")}>
                                                     <Checkbox
@@ -165,7 +166,7 @@ export function PlanJobsSheet({ today, jobs, tasks, farmers, surveyors, villages
                                                     <div className="min-w-0 flex-1">
                                                         <div className="truncate text-sm">{s.name}</div>
                                                         <div className="truncate text-[11px] text-zinc-500">
-                                                            {busy ? `Already has J${busy.jobNo} that day` : `${baseName ? `Base: ${baseName}` : "No base village"} · up to ${s.maxVisitsPerDay} visits`}
+                                                            {busy ? `Already has J${busy.jobNo} that day` : `${start ? `Starts from ${start.label}` : "No home or base village"} · up to ${s.maxVisitsPerDay} visits`}
                                                         </div>
                                                     </div>
                                                 </label>
@@ -233,7 +234,7 @@ export function PlanJobsSheet({ today, jobs, tasks, farmers, surveyors, villages
                                 <div className="rounded-lg bg-zinc-50 dark:bg-zinc-900 px-4 py-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                                     {plan.jobs.length} {plan.jobs.length === 1 ? "job" : "jobs"} · {plan.jobs.reduce((n, j) => n + j.stops.length, 0)} stops ·{" "}
                                     {plan.jobs.reduce((n, j) => n + j.stops.reduce((m, s) => m + s.taskIds.length, 0), 0)} tasks · {formatKm(totalKm)}
-                                    <span className="block text-[11px] font-normal text-zinc-500">Straight-line distances, round trip from each base village.</span>
+                                    <span className="block text-[11px] font-normal text-zinc-500">Straight-line distances, round trip from each surveyor&apos;s home (or base village when no home is set).</span>
                                 </div>
 
                                 {plan.jobs.map((j) => {

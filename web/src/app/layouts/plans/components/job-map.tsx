@@ -1,8 +1,8 @@
 "use client"
 
 // Job map — Google Maps (Maps JavaScript API). The key is NEXT_PUBLIC_GOOGLE_MAPS_API_KEY (platform/env.ts, see
-// web/.env.example); the loader uses the same id and libraries as the repo's other Google maps so they share one script.
-// Shows the base village and the numbered stops joined in visiting order and back to the base (the road route from the
+// web/.env.example); the loader options are shared (lib/google-maps.ts) so every map in the app uses one script.
+// Shows where the day starts (the surveyor's home, else the base village) and the numbered stops joined in visiting order and back to the base (the road route from the
 // Routes API when it's in, straight dashed lines otherwise), each leg labelled with its distance and drive time, the day's
 // unassigned tasks as grey pins; amber dots where the surveyor walks from the road to a stop the bike can't reach
 // and, when ticked, other jobs' stops; clicking a pin offers to add it to this job. Without a key it shows how to set
@@ -11,17 +11,15 @@ import * as React from "react"
 import { GoogleMap, InfoWindowF, MarkerF, OVERLAY_MOUSE_TARGET, OverlayViewF, PolylineF, useJsApiLoader } from "@react-google-maps/api"
 import { MapPinOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { env } from "@/platform/env"
+import { GOOGLE_MAPS_LOADER, hasMapKey } from "@/lib/google-maps"
 import type { LatLng } from "@/lib/orchestration/engine"
 
-const LIBRARIES: "geometry"[] = ["geometry"]
 // The library's functional components (MarkerF, PolylineF, …) are used throughout: its class components can leave stale
 // overlays on the map under React 18+, e.g. the straight lines staying after the road route arrives.
 const CONTAINER = { width: "100%", height: "100%" }
 const centred = (width: number, height: number) => ({ x: -width / 2, y: -height / 2 })
 
-/** Whether maps can load (the key is built in, so this is fixed for the page's life). */
-export const hasMapKey = Boolean(env.googleMapsApiKey)
+export { hasMapKey }
 
 export interface MapStop {
     key: string
@@ -52,6 +50,8 @@ export interface MapCandidate {
 
 interface JobMapProps {
     base?: LatLng
+    /** The surveyor's home (H) or their base village (B). */
+    baseKind?: "home" | "base"
     stops: MapStop[]
     legs: MapLeg[]
     /** The road route from Google, base to base; straight dashed lines between the nodes without it. */
@@ -85,8 +85,8 @@ export function JobMap(props: JobMapProps) {
     return <GoogleJobMap {...props} />
 }
 
-function GoogleJobMap({ base, stops, legs, roadPath, walks = [], candidates, activeKey, onSelectStop, onPickCandidate }: JobMapProps) {
-    const { isLoaded, loadError } = useJsApiLoader({ id: "google-map-script", googleMapsApiKey: env.googleMapsApiKey, libraries: LIBRARIES })
+function GoogleJobMap({ base, baseKind = "base", stops, legs, roadPath, walks = [], candidates, activeKey, onSelectStop, onPickCandidate }: JobMapProps) {
+    const { isLoaded, loadError } = useJsApiLoader(GOOGLE_MAPS_LOADER)
     const [map, setMap] = React.useState<google.maps.Map | null>(null)
     const [openKey, setOpenKey] = React.useState<string | null>(null)
 
@@ -196,9 +196,9 @@ function GoogleJobMap({ base, stops, legs, roadPath, walks = [], candidates, act
             {base && (
                 <MarkerF
                     position={base}
-                    title="Base village"
+                    title={baseKind === "home" ? "Surveyor's home" : "Base village"}
                     zIndex={200}
-                    label={{ text: "B", color: "#18181b", fontSize: "10px", fontWeight: "700" }}
+                    label={{ text: baseKind === "home" ? "H" : "B", color: "#18181b", fontSize: "10px", fontWeight: "700" }}
                     icon={{ path: "M -9 -9 L 9 -9 L 9 9 L -9 9 Z", fillColor: "#ffffff", fillOpacity: 1, strokeColor: "#18181b", strokeWeight: 2, scale: 1 }}
                 />
             )}

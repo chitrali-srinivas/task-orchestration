@@ -41,14 +41,15 @@ interface TasksToolbarProps<TData> {
     activeTab: string
     setActiveTab: (value: string) => void
     onOpenFilters: () => void
-    selectedCount: number
-    /** Open Task planning's Plan jobs with the ticked tasks. */
-    onPlanSelected: () => void
-    onAddSelected: () => void
-    onClearSelection: () => void
+    /** Ticked planned tasks; the Farmers page, which reuses this toolbar, has none. */
+    selectedCount?: number
+    /** Open the Plans page's Plan jobs with the ticked tasks. */
+    onPlanSelected?: () => void
+    onAddSelected?: () => void
+    onClearSelection?: () => void
 }
 
-export function TasksToolbar<TData>({ table, tabs, activeTab, setActiveTab, onOpenFilters, selectedCount, onPlanSelected, onAddSelected, onClearSelection }: TasksToolbarProps<TData>) {
+export function TasksToolbar<TData>({ table, tabs, activeTab, setActiveTab, onOpenFilters, selectedCount = 0, onPlanSelected, onAddSelected, onClearSelection }: TasksToolbarProps<TData>) {
     const filterCount = sheetFilters(table.getState().columnFilters).length
     const isFiltered = filterCount > 0
     const clearSheetFilters = () => table.setColumnFilters((prev) => prev.filter((f) => typeof f.value === "string"))

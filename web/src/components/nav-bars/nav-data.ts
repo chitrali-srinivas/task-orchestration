@@ -1,13 +1,21 @@
 import {
+    Boxes,
+    Building2,
     CalendarRange,
     ClipboardList,
-    Database,
     Factory,
+    FlaskConical,
+    IdCard,
     LayoutPanelLeft,
     ListTodo,
     Map,
+    MapPin,
+    Package,
     Route,
     Smartphone,
+    TestTube,
+    Tractor,
+    Truck,
     Users,
     Workflow,
 } from "lucide-react"
@@ -26,6 +34,14 @@ export interface NavItem {
     }[]
     roles?: UserRole[] // Roles that can see this item. If undefined, visible to all.
 }
+
+export interface NavSection {
+    /** Heading shown above the section's items. */
+    label?: string
+    items: NavItem[]
+}
+
+const HQ: UserRole[] = ["HQ Admin"]
 
 export const data = {
     user: {
@@ -57,65 +73,51 @@ export const data = {
         { name: "Madhopur" },
         { name: "Kishanpur" },
     ],
-    navMain: [] as NavItem[],
-    admin: [] as NavItem[],
-    hqVerifier: [] as NavItem[],
-    hqAdmin: [
+    /** Sidebar sections in order; a section without a label has no heading. */
+    sections: [
         {
-            title: "Dashboard",
-            url: "#hq-a-dashboard",
-            icon: LayoutPanelLeft,
-            roles: ["HQ Admin"] as UserRole[],
+            items: [
+                { title: "Dashboard", url: "#dashboard", icon: LayoutPanelLeft, roles: HQ },
+            ],
         },
         {
-            title: "Survey Builder",
-            url: "/layouts/survey-builder/v1-0",
-            icon: ClipboardList,
-            roles: ["HQ Admin"] as UserRole[],
+            label: "Verification",
+            items: [
+                { title: "Farmers", url: "/layouts/farmers", icon: Tractor, roles: HQ },
+                { title: "Tasks", url: "/layouts/tasks", icon: ListTodo, roles: HQ },
+                { title: "Plans", url: "/layouts/plans", icon: Route, roles: HQ },
+            ],
         },
         {
-            title: "Survey Workflow",
-            url: "/layouts/survey-workflow",
-            icon: Workflow,
-            roles: ["HQ Admin"] as UserRole[],
+            // Placeholders until these pages are built.
+            label: "Science",
+            items: [
+                { title: "Samples", url: "#samples", icon: TestTube, roles: HQ },
+                { title: "Carts", url: "#carts", icon: Boxes, roles: HQ },
+                { title: "Tests", url: "#tests", icon: FlaskConical, roles: HQ },
+                { title: "Shipments", url: "#shipments", icon: Package, roles: HQ },
+            ],
         },
         {
-            title: "Season management",
-            url: "/layouts/season-management",
-            icon: CalendarRange,
-            roles: ["HQ Admin"] as UserRole[],
+            label: "Admin",
+            items: [
+                { title: "Season Management", url: "/layouts/season-management", icon: CalendarRange, roles: HQ },
+                { title: "Masters - Village", url: "/layouts/masters/villages", icon: MapPin, roles: HQ },
+                { title: "Masters - Users", url: "/layouts/masters/users", icon: Users, roles: HQ },
+                { title: "Masters - Fleet", url: "/layouts/masters/fleet", icon: Truck, roles: HQ },
+                { title: "Masters - Drivers", url: "/layouts/masters/drivers", icon: IdCard, roles: HQ },
+                { title: "Masters - Suppliers", url: "/layouts/masters/suppliers", icon: Building2, roles: HQ },
+            ],
         },
         {
-            title: "Tasks",
-            url: "/layouts/tasks",
-            icon: ListTodo,
-            roles: ["HQ Admin"] as UserRole[],
+            label: "Super Admin",
+            items: [
+                { title: "Survey Builder", url: "/layouts/survey-builder/v1-0", icon: ClipboardList, roles: HQ },
+                { title: "Survey Workflow", url: "/layouts/survey-workflow", icon: Workflow, roles: HQ },
+                { title: "Phone simulator", url: "/phone", icon: Smartphone, roles: HQ },
+            ],
         },
-        {
-            title: "Task planning",
-            url: "/layouts/task-planning",
-            icon: Route,
-            roles: ["HQ Admin"] as UserRole[],
-        },
-        {
-            title: "Phone simulator",
-            url: "/phone",
-            icon: Smartphone,
-            roles: ["HQ Admin"] as UserRole[],
-        },
-        {
-            title: "Masters",
-            url: "/layouts/masters",
-            icon: Database,
-            roles: ["HQ Admin"] as UserRole[],
-        },
-        {
-            title: "Farmers",
-            url: "#hq-a-farmers",
-            icon: Users,
-            roles: ["HQ Admin"] as UserRole[],
-        }
-    ],
+    ] as NavSection[],
     others: [] as NavItem[]
 }
 

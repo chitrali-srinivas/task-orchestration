@@ -352,8 +352,8 @@ export function OptionsTab({
                                         </span>
                                         {selectedMaster.sampleRecords.length === 0 && (
                                             <p className="text-[11px] text-zinc-500">
-                                                No records yet. Add them on the{" "}
-                                                <a href="/layouts/masters" className="font-semibold underline underline-offset-2 hover:text-zinc-900 dark:hover:text-zinc-100">Masters</a> page.
+                                                No records yet. Add them on{" "}
+                                                <a href={`/layouts/masters/${selectedMaster.id}`} className="font-semibold underline underline-offset-2 hover:text-zinc-900 dark:hover:text-zinc-100">Masters - {selectedMaster.name}</a>.
                                             </p>
                                         )}
                                         <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">

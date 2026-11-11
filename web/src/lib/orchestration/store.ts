@@ -20,6 +20,7 @@ import {
     addToJob,
     applyJobAction,
     changeSurveyor,
+    dayStart,
     deleteJob,
     jobsFromPlan,
     openJobsByTask,
@@ -108,16 +109,26 @@ export function loadVillages(): Village[] {
     });
 }
 
-/** Surveyors master records: an empty "Max visits per day" means the default, an empty "Active" means active. */
+/**
+ * Surveyor-role users from the Users master: an empty "Max visits per day" means the default, an empty "Active" means
+ * active, and a home location is used only when both numbers are there.
+ */
 export function loadSurveyors(): Surveyor[] {
-    return loadMasterRecords("surveyors").map((r) => ({
-        id: r.id,
-        name: String(r.surveyorName || "Unnamed surveyor"),
-        phone: r.phone || undefined,
-        baseVillageId: r.baseVillageId || undefined,
-        maxVisitsPerDay: parseInt(String(r.maxVisitsPerDay ?? ""), 10) || DEFAULT_MAX_VISITS,
-        active: r.active !== "No",
-    }));
+    return loadMasterRecords("users")
+        .filter((r) => r.role === "Surveyor")
+        .map((r) => {
+            const lat = coordinate(r.homeLat);
+            const lng = coordinate(r.homeLng);
+            return {
+                id: r.id,
+                name: String(r.name || "Unnamed surveyor"),
+                phone: r.phone || undefined,
+                home: lat !== undefined && lng !== undefined ? { lat, lng } : undefined,
+                baseVillageId: r.baseVillageId || undefined,
+                maxVisitsPerDay: parseInt(String(r.maxVisitsPerDay ?? ""), 10) || DEFAULT_MAX_VISITS,
+                active: r.active !== "No",
+            };
+        });
 }
 
 const nowIso = () => new Date().toISOString();
@@ -214,11 +225,11 @@ function applyStatus(tasks: Task[], workflow: Workflow, taskId: string, status: 
 
 const maxVisitsOf = (surveyorId: string) => loadSurveyors().find((s) => s.id === surveyorId)?.maxVisitsPerDay ?? DEFAULT_MAX_VISITS;
 
-/** Farmer locations and the surveyor's base village, for placing and ordering stops by distance. */
+/** Farmer locations and where the surveyor's day starts (home, else base village), for placing and ordering stops. */
 function routeContext(surveyorId: string): RouteContext {
     const villages = loadVillages();
     const farmerById = new Map(loadFarmers().map((f) => [f.id, f]));
-    const base = villages.find((v) => v.id === loadSurveyors().find((s) => s.id === surveyorId)?.baseVillageId)?.centre;
+    const base = dayStart(loadSurveyors().find((s) => s.id === surveyorId), villages)?.at;
     return { locate: (farmerId) => stopLocation(farmerById.get(farmerId), villages), base };
 }
 

@@ -5,7 +5,7 @@
 // and a detail sheet per row where collected tasks are verified and tasks are cancelled with a reason.
 // No date selection: all tasks, paginated, in work-queue order (status level, then oldest planned start first), so
 // pending tasks read oldest first for surveyor assignment. The simulated "today" is set on the Phone simulator.
-// Planned tasks go on jobs (one surveyor's visits for a day): tick rows → Plan these (Task planning's planner) or
+// Planned tasks go on jobs (one surveyor's visits for a day): tick rows → Plan these (the Plans page's planner) or
 // Add to job, or Add to job in the detail sheet.
 import * as React from "react";
 import { format } from "date-fns";
@@ -67,6 +67,13 @@ export default function TasksPage() {
         setJobs(loadJobs());
         setSurveyors(loadSurveyors());
         SurveyService.getAllSurveys().then(setSurveys);
+        // Links from the Farmers page: ?task=<id> opens that task.
+        const task = new URLSearchParams(window.location.search).get("task");
+        if (task) {
+            setSelectedId(task);
+            setIsSheetOpen(true);
+            window.history.replaceState(null, "", window.location.pathname);
+        }
     }, []);
 
     const records = React.useMemo(
@@ -215,7 +222,7 @@ export default function TasksPage() {
                                     setActiveTab={handleTabChange}
                                     onOpenFilters={() => openFilters()}
                                     selectedCount={selectedIds.length}
-                                    onPlanSelected={() => router.push(`/layouts/task-planning?plan=${selectedIds.join(",")}`)}
+                                    onPlanSelected={() => router.push(`/layouts/plans?plan=${selectedIds.join(",")}`)}
                                     onAddSelected={() => setAddIds(selectedIds)}
                                     onClearSelection={() => setRowSelection({})}
                                 />

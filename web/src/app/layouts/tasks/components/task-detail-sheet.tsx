@@ -3,7 +3,7 @@
 // Task detail — Deployment's detail sheet (deployment/components/engagement-detail-sheet.tsx) for one task: farmer header,
 // details bar, the task's dates, job and lineage, the survey response, and a footer with the previous / next pager and
 // the HQ actions (add a planned task to a job, verify, cancel). Cancelling asks for a reason, as Deployment's Report asks
-// for a comment. The job's route map is on Task planning (the Job link opens it).
+// for a comment. The job's route map is on the Plans page (the Job link opens it).
 import * as React from "react"
 import { format } from "date-fns"
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Inbox, MapPin, Route as RouteIcon, X } from "lucide-react"
@@ -231,7 +231,7 @@ export function TaskDetailSheet({
                                     <Detail label="Last updated">{format(new Date(record.updatedAt), "dd MMM yy, hh:mm a").toUpperCase()}</Detail>
                                     <Detail label="Job">
                                         {record.jobId && record.jobStatus ? (
-                                            <a href={`/layouts/task-planning?job=${record.jobId}`} className="font-medium underline-offset-2 hover:underline">
+                                            <a href={`/layouts/plans?job=${record.jobId}`} className="font-medium underline-offset-2 hover:underline">
                                                 <span className="font-mono">{record.jobCode}</span> · {JOB_STATUS_NAME[record.jobStatus]}
                                             </a>
                                         ) : (

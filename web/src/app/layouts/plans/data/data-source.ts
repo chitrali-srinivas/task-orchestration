@@ -1,4 +1,4 @@
-// PROTOTYPE-ONLY — the single swap point between the Task planning UI and its data.
+// PROTOTYPE-ONLY — the single swap point between the Plans UI and its data.
 // mati-demo: rows are joined from the orchestration store (localStorage) and served by the in-memory mock.
 // Production: replace this file with an API-backed TableDataSource; the joined row shape is data/schema.ts.
 "use client";
@@ -7,7 +7,7 @@ import * as React from "react";
 import type { TableDataSource } from "@/lib/server-table";
 import { useMockTableDataSource } from "@/mocks/server-table";
 import { STATUS, type Farmer, type Task } from "@/lib/orchestration/engine";
-import { JOB_STATUS, Job, JobStatus, Surveyor, Village, routeKm, stopLocation } from "@/lib/orchestration/jobs";
+import { JOB_STATUS, Job, JobStatus, Surveyor, Village, dayStart, routeKm, stopLocation } from "@/lib/orchestration/jobs";
 import { JobFilters, JobRecord } from "./schema";
 import { createJobsTableConfig } from "./table-config";
 import { jobsApiContract } from "./api-contract";
@@ -21,7 +21,8 @@ export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
     [JOB_STATUS.closed]: "Closed",
 };
 
-export const baseOf = (surveyor: Surveyor | undefined, villages: Village[]) => villages.find((v) => v.id === surveyor?.baseVillageId)?.centre;
+/** Where a surveyor's round trip starts and ends: their home when set, else their base village centre. */
+export const baseOf = (surveyor: Surveyor | undefined, villages: Village[]) => dayStart(surveyor, villages)?.at;
 
 /** Join each job with its surveyor, the stops' farmers and the tasks' statuses (what a list API would return). */
 export function buildJobRecords(jobs: Job[], tasks: Task[], farmers: Farmer[], surveyors: Surveyor[], villages: Village[]): JobRecord[] {

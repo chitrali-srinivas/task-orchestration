@@ -30,6 +30,7 @@ import {
     Surveyor,
     Village,
     bestOrder,
+    dayStart,
     distanceKm,
     driveMinutes,
     isEditable,
@@ -188,8 +189,9 @@ function JobWorkspace({
     const job = record.job
     const surveyor = surveyorById.get(job.surveyorId)
     const editable = isEditable(job)
-    const base = baseOf(surveyor, villages)
-    const baseName = villages.find((v) => v.id === surveyor?.baseVillageId)?.name
+    const start = dayStart(surveyor, villages)
+    const base = start?.at
+    const startLetter = start?.kind === "home" ? "H" : "B"
     const maxVisits = surveyor?.maxVisitsPerDay ?? DEFAULT_MAX_VISITS
     const code = (id: string) => (taskById.get(id) ? `T${taskById.get(id)!.taskNo}` : "?")
     const farmerName = (id: string) => farmerById.get(id)?.name ?? "(unknown farmer)"
@@ -221,7 +223,7 @@ function JobWorkspace({
     const located = shown.map((s) => locate(s.farmerId))
     const stopDone = (stop: JobStop) => stop.taskIds.every((id) => taskById.get(id)?.status !== STATUS.planned)
     const unfinished = unfinishedStops(job, tasks)
-    const route = [baseName ? `Base ${baseName}` : null, ...shown.map((_, i) => String(i + 1)), baseName ? "base" : null].filter(Boolean).join(" → ")
+    const route = [start ? start.label[0].toUpperCase() + start.label.slice(1) : null, ...shown.map((_, i) => String(i + 1)), start?.kind ?? null].filter(Boolean).join(" → ")
     /** A farmer not on the job yet takes a visit; the job may be full. */
     const fullFor = (farmerId: string) => job.stops.length >= maxVisits && !byFarmer.has(farmerId)
 
@@ -409,6 +411,7 @@ function JobWorkspace({
                     <div className="relative h-[45vh] lg:h-auto lg:flex-1 min-w-0 bg-zinc-100 dark:bg-zinc-900">
                         <JobMap
                             base={base}
+                            baseKind={start?.kind}
                             stops={mapStops}
                             legs={legs}
                             roadPath={shownRoute?.legs.flatMap((l) => l.path)}
@@ -422,7 +425,8 @@ function JobWorkspace({
                             <div className="absolute left-3 top-3 z-10 w-[230px] space-y-1.5 rounded-lg border border-zinc-200 bg-white/95 p-3 text-[11px] text-zinc-700 shadow-sm dark:border-zinc-800 dark:bg-zinc-950/95 dark:text-zinc-300">
                                 <div className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Legend</div>
                                 <div className="flex items-center gap-2">
-                                    <span className="flex h-4 w-4 items-center justify-center rounded-sm border-2 border-zinc-900 bg-white text-[8px] font-bold text-zinc-900">B</span> Base village
+                                    <span className="flex h-4 w-4 items-center justify-center rounded-sm border-2 border-zinc-900 bg-white text-[8px] font-bold text-zinc-900">{startLetter}</span>
+                                    {start?.kind === "home" ? "Surveyor's home" : "Base village"}
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span className="flex h-4 w-4 items-center justify-center rounded-full bg-zinc-900 text-[8px] font-bold text-white">1</span> Stop, in visiting order
@@ -476,8 +480,8 @@ function JobWorkspace({
                                 <>
                                     {base && (
                                         <div className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-                                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 border-zinc-900 text-[10px] font-bold text-zinc-900 dark:border-zinc-100 dark:text-zinc-100">B</span>
-                                            Start · base {baseName}
+                                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 border-zinc-900 text-[10px] font-bold text-zinc-900 dark:border-zinc-100 dark:text-zinc-100">{startLetter}</span>
+                                            Start · {start?.label}
                                         </div>
                                     )}
                                     {shown.map((stop, i) => {
@@ -603,8 +607,8 @@ function JobWorkspace({
                                         <>
                                             {connector(returnInfo.km, returnInfo.min, "leg-return")}
                                             <div className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-                                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 border-zinc-900 text-[10px] font-bold text-zinc-900 dark:border-zinc-100 dark:text-zinc-100">B</span>
-                                                Back to base {baseName}
+                                                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 border-zinc-900 text-[10px] font-bold text-zinc-900 dark:border-zinc-100 dark:text-zinc-100">{startLetter}</span>
+                                                {start?.kind === "home" ? "Back home" : `Back to ${start?.label}`}
                                             </div>
                                         </>
                                     )}
@@ -663,7 +667,7 @@ function JobWorkspace({
                                     <Stat label="On site" value={formatMinutes(shownTotals.onSiteMin)} />
                                 </div>
                                 <p className="text-[10px] text-zinc-400">
-                                    Round trip from the base village.{" "}
+                                    Round trip from {start?.kind === "home" ? "the surveyor's home" : "the base village"}.{" "}
                                     {shownRoute
                                         ? `Road distance and drive time from Google, without traffic; walking from the road to stops off it, there and back, at ${WALK_KMH} km/h`
                                         : `Straight-line at ${EFFORT.driveKmh} km/h until the road route is in`}
@@ -700,8 +704,7 @@ function JobWorkspace({
                                         {pendingSurveyor && pendingEffort && (
                                             <div className="space-y-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3">
                                                 <p className="text-xs text-zinc-700 dark:text-zinc-300">
-                                                    {pendingSurveyor.name} starts from{" "}
-                                                    {villages.find((v) => v.id === pendingSurveyor.baseVillageId)?.name ? `base ${villages.find((v) => v.id === pendingSurveyor.baseVillageId)?.name}` : "no base village"}.
+                                                    {pendingSurveyor.name} starts from {dayStart(pendingSurveyor, villages)?.label ?? "nowhere set (no home or base village)"}.
                                                 </p>
                                                 <Delta {...deltaProps(compare(savedRoute, savedEffort, savedWalkMin, pendingRoute, pendingEffort, pendingWalkMin))} />
                                                 <div className="flex gap-2">

@@ -19,7 +19,7 @@ import type { Farmer, LatLng, Located, STATUS, Task } from "./engine";
 // Type-only imports above keep this file runnable by `node --test` without path resolution.
 const PLANNED: typeof STATUS.planned = "planned";
 
-/** Farmer visits a surveyor can make in a day when the Surveyors master leaves it empty. */
+/** Farmer visits a surveyor can make in a day when the Users master leaves it empty. */
 export const DEFAULT_MAX_VISITS = 8;
 
 export interface Village {
@@ -34,9 +34,27 @@ export interface Surveyor {
     id: string;
     name: string;
     phone?: string;
+    /** Where the surveyor lives (Users master); their day starts and ends here when set. */
+    home?: LatLng;
     baseVillageId?: string;
     maxVisitsPerDay: number;
     active: boolean;
+}
+
+/** Where a surveyor's day starts and ends. */
+export interface DayStart {
+    at: LatLng;
+    kind: "home" | "base";
+    /** "home" or "base Rampur". */
+    label: string;
+}
+
+/** A surveyor's home when it's set, else their base village's centre; undefined when neither is known. */
+export function dayStart(surveyor: Surveyor | undefined, villages: Village[]): DayStart | undefined {
+    if (!surveyor) return undefined;
+    if (surveyor.home) return { at: surveyor.home, kind: "home", label: "home" };
+    const village = villages.find((v) => v.id === surveyor.baseVillageId);
+    return village?.centre ? { at: village.centre, kind: "base", label: `base ${village.name}` } : undefined;
 }
 
 /* ------------------------------ Job record ------------------------------ */
@@ -511,9 +529,9 @@ export interface PlanInput {
  * Plan a day's jobs:
  *  1. one stop per farmer, covering all of that farmer's tasks due that day that no open job holds;
  *  2. most urgent stop first (earliest end date, then oldest planned start);
- *  3. each stop goes to the surveyor with visits left whose base village or stops so far are nearest (a surveyor
- *     with neither starts anywhere), so nearby farmers end up with the same surveyor;
- *  4. each job is ordered nearest-next from the base, then untangled (2-opt), as a round trip to the base;
+ *  3. each stop goes to the surveyor with visits left whose start (home, else base village) or stops so far are
+ *     nearest (a surveyor with neither starts anywhere), so nearby farmers end up with the same surveyor;
+ *  4. each job is ordered nearest-next from the start, then untangled (2-opt), as a round trip back to it;
  *  5. stops with no location, or no surveyor with visits left, are listed as unplanned.
  */
 export function planJobs(input: PlanInput): JobPlan {
@@ -546,7 +564,7 @@ export function planJobs(input: PlanInput): JobPlan {
         return job ? [{ surveyorId: s.id, job }] : [];
     });
     const free = input.surveyors.filter((s) => s.active && !busy.some((b) => b.surveyorId === s.id));
-    const base = new Map(free.map((s) => [s.id, input.villages.find((v) => v.id === s.baseVillageId)?.centre]));
+    const base = new Map(free.map((s) => [s.id, dayStart(s, input.villages)?.at]));
     const allocated = new Map<string, { stop: JobStop; location: LatLng }[]>(free.map((s) => [s.id, []]));
 
     const unplanned: JobPlan["unplanned"] = [];
