@@ -1,7 +1,7 @@
 # Mati task orchestration engine (MVP)
 
-No seed data: everything is created in the UI. All pages are in the Next.js app in `web/` (a copy of
-[mati-carbon-demo](https://github.com/shashank-s73/mati-carbon-demo) with the HQ Admin pages added).
+No seed data: everything is created in the UI. All pages are in the Next.js app in `web/` (started from
+[mati-carbon-demo](https://github.com/shashank-s73/mati-carbon-demo), now trimmed to Season management and the HQ Admin pages).
 
 ```bash
 cd web && npm install && npx next dev -p 3100
@@ -13,13 +13,16 @@ Copy `web/.env.example` to `web/.env.local` (git-ignored) and fill it in, then r
 
 | Variable | Needed for |
 |---|---|
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | **Required for maps**: the Task planning job map (also the Deployment and Map view pages). In Google Cloud, enable the **Maps JavaScript API** for the key and restrict it to your site addresses (`http://localhost:3100/*`, the Cloud Run URL). Without it the map panel says how to set it; lists, distances and effort still work. |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | **Required for maps**: the Task planning job map. In Google Cloud, enable the **Maps JavaScript API** for the key and restrict it to your site addresses (`http://localhost:3100/*`, the Cloud Run URL). Without it the map panel says how to set it; lists, distances and effort still work. |
 | `GOOGLE_ROUTES_API_KEY` | **Road routes** in the job workspace: road line, road km and drive minutes per leg (Google Routes API `computeRoutes`, driving, no traffic). **Server-only** (no `NEXT_PUBLIC_` prefix): only `src/app/api/routes/compute/route.ts` reads it, so it never reaches the browser. Enable the **Routes API** and restrict the key to it. Without it the workspace shows straight lines and estimated drive times. |
 
 Road routes are fetched once per stop sequence and cached in the browser (`mati.roadRoutes`), so browsing jobs doesn't call Google again; the planner itself still allocates and orders stops on straight-line distances. The `/api/routes/compute` endpoint is open to anyone who can reach the app, so put the deployed app behind sign-in (or add rate limits) before sharing it widely, or the Routes key can be spent by others.
 
+`/` opens Season management. The sidebar shows the HQ Admin section; the other demo pages that came with mati-carbon-demo were removed (they're in git history).
+
 | URL | Page |
 |---|---|
+| `/layouts/season-management` | **Season management** — seasons table with timeline, filters and a detail sheet (mock data) |
 | `/layouts/survey-builder/v1-0` | **Survey Builder** — the original builder, simplified; a survey has **statuses** (default `planned, collected, verified, expired, cancelled`) |
 | `/layouts/survey-workflow` | **Survey Workflow** — one per season: which survey follows which, on what status, when its task is created, and for how long it is valid |
 | `/layouts/tasks` | **Tasks** — HQ summary of every task: id, survey template, farmer, status, job, assigned surveyor and visit date, planned start/end, what created it; Plan these / Add to job / Verify / Cancel |

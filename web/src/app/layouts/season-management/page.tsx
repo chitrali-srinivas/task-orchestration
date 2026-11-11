@@ -435,8 +435,6 @@ export default function SeasonManagementPage() {
                 <div className="shrink-0 py-3 px-1 border-t border-zinc-100 dark:border-zinc-800 mt-4">
                     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
                         <div className="flex items-center gap-4">
-                            <span>Season Framework v2.1.0-stable</span>
-                            <span className="hidden sm:inline opacity-30">|</span>
                             <div className="flex items-center gap-1.5">
                                 <span>All rights reserved by Mati Carbon Pvt</span>
                                 <button className="text-zinc-900 dark:text-zinc-300 hover:underline underline-offset-2 font-bold">TnC</button>
