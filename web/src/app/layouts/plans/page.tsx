@@ -6,8 +6,8 @@
 // the planner (lib/orchestration/jobs.ts) allocates and orders the stops. Lifecycle: created → assigned (HQ) → accepted
 // → in progress (surveyor, on the phone) → job sheet closed. Opened from Tasks with ?plan=<task ids> or ?job=<job id>.
 import * as React from "react";
-import { format } from "date-fns";
 import { NavBarType4 } from "@/components/nav-bars/NavBarType4";
+import { PageFooter } from "@/components/page-footer";
 import { useServerTable } from "@/lib/server-table";
 import type { Farmer, Task } from "@/lib/orchestration/engine";
 import { JOB_STATUS, JOB_STATUSES, Job, JobPlan, Surveyor, Village } from "@/lib/orchestration/jobs";
@@ -56,7 +56,8 @@ export default function TaskPlanningPage() {
     const [planTaskIds, setPlanTaskIds] = React.useState<string[] | null>(null);
     const [planKey, setPlanKey] = React.useState(0);
 
-    React.useEffect(() => {
+    /** Read everything from the store again (on load and from the footer's refresh button). */
+    const reload = React.useCallback(() => {
         const t = loadToday();
         setToday(t);
         setTasks(refreshTasks(t));
@@ -65,6 +66,10 @@ export default function TaskPlanningPage() {
         setSurveyors(loadSurveyors());
         setVillages(loadVillages());
         SurveyService.getAllSurveys().then(setSurveys);
+    }, []);
+
+    React.useEffect(() => {
+        reload();
         // Links from the Tasks page: ?plan=<task ids> opens Plan jobs with them; ?job=<id> opens that job.
         const params = new URLSearchParams(window.location.search);
         const plan = params.get("plan");
@@ -75,7 +80,7 @@ export default function TaskPlanningPage() {
             setIsSheetOpen(true);
         }
         if (plan !== null || job) window.history.replaceState(null, "", window.location.pathname);
-    }, []);
+    }, [reload]);
 
     const records = React.useMemo(() => buildJobRecords(jobs, tasks, farmers, surveyors, villages), [jobs, tasks, farmers, surveyors, villages]);
     const dataSource = useJobsDataSource(records);
@@ -273,32 +278,7 @@ export default function TaskPlanningPage() {
                     initialOpenField={initialFilterField}
                 />
 
-                {/* Footer Section */}
-                <div className="shrink-0 py-3 px-1 border-t border-zinc-100 dark:border-zinc-800 mt-4">
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                        <div className="flex items-center gap-4">
-                            <span>Version 1.2.4-stable</span>
-                            <span className="hidden sm:inline opacity-30">|</span>
-                            <div className="flex items-center gap-1.5">
-                                <span>All rights reserved by Mati Carbon Pvt</span>
-                                <button className="text-zinc-900 dark:text-zinc-300 hover:underline underline-offset-2 font-bold">TnC</button>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-1.5">
-                                <span className="opacity-50">Session ID:</span>
-                                <span className="font-mono text-zinc-600 dark:text-zinc-400">MC-8824-X92</span>
-                            </div>
-                            <span className="hidden sm:inline opacity-30">|</span>
-                            <div className="flex items-center gap-1.5">
-                                <span className="opacity-50">Last Refreshed:</span>
-                                <span className="text-zinc-600 dark:text-zinc-400" suppressHydrationWarning>
-                                    {format(new Date(), "dd MMM yyyy, hh:mm aa")}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <PageFooter sessionId="MC-8824-X92" onRefresh={reload} />
             </div>
         </NavBarType4>
     );

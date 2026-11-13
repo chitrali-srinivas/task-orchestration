@@ -23,6 +23,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { AZOption } from "../../services/mock-surveys";
+import { CategoryField } from "../common/category-field";
 
 interface CreateSurveyDialogProps {
     azs: AZOption[];
@@ -50,6 +51,7 @@ export function CreateSurveyDialog({
     const [description, setDescription] = useState("");
     const [azId, setAzId] = useState(currentAzId || "");
     const [defaultLocale, setDefaultLocale] = useState("en");
+    const [category, setCategory] = useState("Field Operations");
     const [error, setError] = useState<string | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -67,8 +69,10 @@ export function CreateSurveyDialog({
                 description: description.trim() || undefined,
                 azId,
                 defaultLocale,
+                category,
             });
             setName("");
+            setCategory("Field Operations");
             setDescription("");
             setError(null);
             setOpen(false);
@@ -129,6 +133,8 @@ export function CreateSurveyDialog({
                                 autoFocus
                             />
                         </div>
+
+                        <CategoryField id="survey-category" value={category} onChange={setCategory} />
 
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">

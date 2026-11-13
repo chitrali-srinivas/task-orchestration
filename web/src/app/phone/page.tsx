@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SurveyService } from "@/app/layouts/survey-builder/services/survey-service";
 import { SurveyModel } from "@/app/layouts/survey-builder/types/survey-schema";
 import { PreviewAllQuestions } from "@/app/layouts/survey-builder/components/preview/preview-runtime";
+import { isQuestionVisible } from "@/app/layouts/survey-builder/lib/logic-evaluator";
 import { Workflow } from "@/app/layouts/survey-workflow/workflow-store";
 import { Farmer, LatLng, LocationSource, STATUS, Task, isPendingOnApp } from "@/lib/orchestration/engine";
 import { JOB_STATUS, Job, JobStatus, Surveyor, Village, distanceKm, openJobsByTask, stopLocation, unfinishedStops } from "@/lib/orchestration/jobs";
@@ -586,8 +587,21 @@ function CloseJobSheetScreen({ job, unfinished, farmerName, taskLabel, isPlanned
 
 /* ------------------------------ Forms ------------------------------ */
 
+const isEmptyAnswer = (v: unknown) =>
+    v === undefined || v === null || (typeof v === "string" && !v.trim()) || (Array.isArray(v) && v.length === 0) ||
+    (typeof v === "object" && !Array.isArray(v) && "vertices" in v && ((v as { vertices?: unknown[] }).vertices?.length ?? 0) < 3);
+
+/** Required questions on show (outside repeaters) that have no answer yet, e.g. the plot boundary planning needs. */
+function missingRequired(survey: SurveyModel, answers: Record<string, unknown>) {
+    const inRepeater = new Set(survey.questions.flatMap((q) => (q.repeater?.isRepeater ? q.repeater.childQuestionIds || [] : [])));
+    return survey.questions.filter((q) => q.validation?.required && !inRepeater.has(q.id) && isQuestionVisible(q, answers) && isEmptyAnswer(answers[q.id]));
+}
+
 function SurveyForm({ title, subtitle, survey, submitLabel, emptyMessage, onBack, onSubmit }: { title: string; subtitle?: string; survey?: SurveyModel; submitLabel?: string; emptyMessage?: string; onBack: () => void; onSubmit: (answers: Record<string, unknown>) => void }) {
     const [answers, setAnswers] = useState<Record<string, any>>({});
+    const [tried, setTried] = useState(false);
+    const missing = survey ? missingRequired(survey, answers) : [];
+    const label = (q: SurveyModel["questions"][number]) => `Q${q.displayIndex || q.number} ${q.titles[survey?.defaultLocale || "en"] || q.titles.en || Object.values(q.titles)[0] || ""}`.trim();
     return (
         <div className="flex h-full flex-col">
             <div className="flex items-center gap-2 border-b border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
@@ -597,9 +611,21 @@ function SurveyForm({ title, subtitle, survey, submitLabel, emptyMessage, onBack
                     {subtitle && <div className="truncate text-[10px] text-zinc-500">{subtitle}</div>}
                 </div>
             </div>
+            {tried && missing.length > 0 && (
+                <div className="border-b border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+                    Answer the required questions first: {missing.map(label).join(", ")}.
+                </div>
+            )}
             <div className="min-h-0 flex-1">
                 {survey ? (
-                    <PreviewAllQuestions survey={survey} locale={survey.defaultLocale || "en"} runtimeAnswers={answers} onChangeAnswer={(id, v) => setAnswers((a) => ({ ...a, [id]: v }))} onSubmit={() => onSubmit(answers)} submitLabel={submitLabel} />
+                    <PreviewAllQuestions
+                        survey={survey}
+                        locale={survey.defaultLocale || "en"}
+                        runtimeAnswers={answers}
+                        onChangeAnswer={(id, v) => setAnswers((a) => ({ ...a, [id]: v }))}
+                        onSubmit={() => (missing.length > 0 ? setTried(true) : onSubmit(answers))}
+                        submitLabel={submitLabel}
+                    />
                 ) : (
                     <p className="p-6 text-center text-xs text-rose-600">{emptyMessage || "Survey template not found."}</p>
                 )}

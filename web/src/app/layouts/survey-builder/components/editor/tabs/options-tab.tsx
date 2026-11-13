@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { OptionItem, QuestionModel } from "../../../types/survey-schema";
 import { MASTER_DEFINITIONS, getMasterSets, getMasterSetById } from "../../../lib/master-data-registry";
+import { systemFieldOf } from "../../../lib/system-fields";
 
 interface OptionsTabProps {
     question: QuestionModel;
@@ -146,6 +147,8 @@ export function OptionsTab({
 
 
     const isMasterSource = question.optionSource === "master";
+    // The system Village field always offers one village from Masters - Village.
+    const lockSource = Boolean(systemFieldOf(question));
     const defaultMasterId = MASTER_DEFINITIONS[0].id;
     const masterSets = getMasterSets();
     const masterConfig = question.masterDataConfig || { masterSetId: defaultMasterId };
@@ -199,7 +202,7 @@ export function OptionsTab({
                 <div className="grid grid-cols-2 gap-3">
                     <button
                         type="button"
-                        disabled={isPublished}
+                        disabled={isPublished || lockSource}
                         onClick={() => handleOptionSourceChange("custom")}
                         className={cn(
                             "flex items-start gap-3 p-3 rounded-lg border text-left transition-all cursor-pointer",
@@ -224,7 +227,7 @@ export function OptionsTab({
 
                     <button
                         type="button"
-                        disabled={isPublished}
+                        disabled={isPublished || lockSource}
                         onClick={() => handleOptionSourceChange("master")}
                         className={cn(
                             "flex items-start gap-3 p-3 rounded-lg border text-left transition-all cursor-pointer",
@@ -258,7 +261,7 @@ export function OptionsTab({
                                 Master
                             </Label>
                             <Select
-                                disabled={isPublished}
+                                disabled={isPublished || lockSource}
                                 value={masterConfig.masterSetId || defaultMasterId}
                                 onValueChange={handleSelectMasterSet}
                             >

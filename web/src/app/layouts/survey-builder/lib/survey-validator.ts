@@ -2,6 +2,7 @@ import { SurveyModel } from "../types/survey-schema";
 import { analyzeDependencyGraph, DependencyIssue } from "./dependency-validator";
 import { QUESTION_TYPE_REGISTRY } from "../registry/question-type-registry";
 import { validateRegexSafety } from "./regex-safety";
+import { SYSTEM_FIELDS, systemFieldIssues } from "./system-fields";
 
 export interface ValidationItem {
     id: string;
@@ -155,8 +156,8 @@ export function validateSurvey(survey: SurveyModel): SurveyValidationResult {
             }
         });
 
-        // Choice Questions Option Verification
-        if (typeDescriptor?.supports.options) {
+        // Choice Questions Option Verification (master-data questions take their options from the master instead)
+        if (typeDescriptor?.supports.options && q.optionSource !== "master") {
             if (!q.options || q.options.length < 2) {
                 errors.push({
                     id: `err_options_count_${q.id}`,
@@ -452,6 +453,21 @@ export function validateSurvey(survey: SurveyModel): SurveyValidationResult {
                 }
             }
         }
+    });
+
+    // 3b. System fields: a Farmer Enrollment survey must ask for name, village and plot boundary, unchanged.
+    systemFieldIssues(survey).forEach((issue, i) => {
+        const q = issue.questionId ? survey.questions.find((x) => x.id === issue.questionId) : undefined;
+        errors.push({
+            id: `err_system_field_${issue.key}_${i}`,
+            type: "error",
+            category: "Question",
+            questionId: q?.id,
+            questionNumber: q?.number,
+            questionDisplayIndex: q?.displayIndex,
+            title: `System field: ${SYSTEM_FIELDS.find((f) => f.key === issue.key)?.label ?? issue.key}`,
+            message: issue.message,
+        });
     });
 
     // 4. Dependency Graph Analysis

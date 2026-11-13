@@ -55,8 +55,9 @@ export function RepeaterTab({
 
     // Eligible child questions that follow this repeater
     const currentIndex = allQuestions.findIndex((q) => q.id === question.id);
+    // System fields (lib/system-fields.ts) stay at the top level, so they can't be moved in.
     const availableSuccessorQuestions = allQuestions.filter(
-        (q, idx) => idx > currentIndex && !childIds.includes(q.id) && !q.repeater?.isRepeater && q.type !== "Repeater_QT"
+        (q, idx) => idx > currentIndex && !childIds.includes(q.id) && !q.repeater?.isRepeater && q.type !== "Repeater_QT" && !q.systemKey
     );
 
     // Other numeric questions that could serve as count source
@@ -250,8 +251,10 @@ export function RepeaterTab({
         const hierarchicalDisplay = `${question.displayIndex || question.number}.${newChildNum}`;
         const baseCol = sourceQuestion.columnName || "q";
 
+        const copySource = { ...sourceQuestion };
+        delete copySource.systemKey; // a copy is an ordinary question
         const clonedQuestion: QuestionModel = {
-            ...JSON.parse(JSON.stringify(sourceQuestion)),
+            ...JSON.parse(JSON.stringify(copySource)),
             id: newId,
             number: allQuestions.length + 1,
             displayIndex: hierarchicalDisplay,

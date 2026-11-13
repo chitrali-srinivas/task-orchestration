@@ -51,6 +51,7 @@ export function serializeQuestionToCoreJSON(
 
     return {
         id: question.id,
+        ...(question.systemKey ? { systemKey: question.systemKey } : {}),
         number: question.number,
         displayIndex: question.displayIndex || String(question.number),
         type: question.type,

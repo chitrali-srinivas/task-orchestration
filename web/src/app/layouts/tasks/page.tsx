@@ -8,10 +8,10 @@
 // Planned tasks go on jobs (one surveyor's visits for a day): tick rows → Plan these (the Plans page's planner) or
 // Add to job, or Add to job in the detail sheet.
 import * as React from "react";
-import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { RowSelectionState } from "@tanstack/react-table";
 import { NavBarType4 } from "@/components/nav-bars/NavBarType4";
+import { PageFooter } from "@/components/page-footer";
 import { useServerTable } from "@/lib/server-table";
 import { Farmer, STATUS, Task } from "@/lib/orchestration/engine";
 import { Job, Surveyor } from "@/lib/orchestration/jobs";
@@ -58,7 +58,8 @@ export default function TasksPage() {
     const [filterSheetOpen, setFilterSheetOpen] = React.useState(false);
     const [initialFilterField, setInitialFilterField] = React.useState<string | null>(null);
 
-    React.useEffect(() => {
+    /** Read everything from the store again (on load and from the footer's refresh button). */
+    const reload = React.useCallback(() => {
         const t = loadToday();
         setToday(t);
         setTasks(refreshTasks(t));
@@ -67,6 +68,10 @@ export default function TasksPage() {
         setJobs(loadJobs());
         setSurveyors(loadSurveyors());
         SurveyService.getAllSurveys().then(setSurveys);
+    }, []);
+
+    React.useEffect(() => {
+        reload();
         // Links from the Farmers page: ?task=<id> opens that task.
         const task = new URLSearchParams(window.location.search).get("task");
         if (task) {
@@ -74,7 +79,7 @@ export default function TasksPage() {
             setIsSheetOpen(true);
             window.history.replaceState(null, "", window.location.pathname);
         }
-    }, []);
+    }, [reload]);
 
     const records = React.useMemo(
         () => buildTaskRecords(tasks, farmers, surveys, workflows, jobs, surveyors),
@@ -299,32 +304,7 @@ export default function TasksPage() {
                     initialOpenField={initialFilterField}
                 />
 
-                {/* Footer Section */}
-                <div className="shrink-0 py-3 px-1 border-t border-zinc-100 dark:border-zinc-800 mt-4">
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                        <div className="flex items-center gap-4">
-                            <span>Version 1.2.4-stable</span>
-                            <span className="hidden sm:inline opacity-30">|</span>
-                            <div className="flex items-center gap-1.5">
-                                <span>All rights reserved by Mati Carbon Pvt</span>
-                                <button className="text-zinc-900 dark:text-zinc-300 hover:underline underline-offset-2 font-bold">TnC</button>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-1.5">
-                                <span className="opacity-50">Session ID:</span>
-                                <span className="font-mono text-zinc-600 dark:text-zinc-400">MC-8824-X92</span>
-                            </div>
-                            <span className="hidden sm:inline opacity-30">|</span>
-                            <div className="flex items-center gap-1.5">
-                                <span className="opacity-50">Last Refreshed:</span>
-                                <span className="text-zinc-600 dark:text-zinc-400" suppressHydrationWarning>
-                                    {format(new Date(), "dd MMM yyyy, hh:mm aa")}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <PageFooter sessionId="MC-8824-X92" onRefresh={reload} />
             </div>
         </NavBarType4>
     );

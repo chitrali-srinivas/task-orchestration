@@ -17,6 +17,7 @@ import { BackendQuestionType, QuestionModel } from "../../../types/survey-schema
 import { QUESTION_TYPE_REGISTRY } from "../../../registry/question-type-registry";
 import { generateColumnName } from "../../../lib/survey-normalizer";
 import { QuestionTypeHelpPopover } from "../../common/question-type-help-popover";
+import { systemFieldOf } from "../../../lib/system-fields";
 
 interface BasicSettingsTabProps {
     question: QuestionModel;
@@ -31,12 +32,14 @@ export function BasicSettingsTab({
 }: BasicSettingsTabProps) {
     const [regexDialogOpen, setRegexDialogOpen] = useState(false);
     const hasRegex = Boolean(question.validation.regexPattern);
+    // System fields (lib/system-fields.ts) keep their type, column and Required; the title stays editable.
+    const isSystem = Boolean(systemFieldOf(question));
 
     const handleTitleChange = (locale: string, val: string) => {
         const updatedTitles = { ...question.titles, [locale]: val };
         // If changing english title and column name hasn't been heavily customized, auto-suggest
         let newCol = question.columnName;
-        if (locale === "en" && (!newCol || newCol === generateColumnName(question.titles.en || ""))) {
+        if (!isSystem && locale === "en" && (!newCol || newCol === generateColumnName(question.titles.en || ""))) {
             newCol = generateColumnName(val);
         }
 
@@ -103,7 +106,7 @@ export function BasicSettingsTab({
                         <Select
                             value={question.type}
                             onValueChange={(val: any) => handleTypeChange(val)}
-                            disabled={isPublished}
+                            disabled={isPublished || isSystem}
                         >
                             <SelectTrigger id="q-type-select" className="h-10 bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs">
                                 <SelectValue placeholder="Select type" />
@@ -126,13 +129,14 @@ export function BasicSettingsTab({
                             </Label>
                             <button
                                 type="button"
+                                disabled={isPublished || isSystem}
                                 onClick={() =>
                                     onChangeQuestion({
                                         ...question,
                                         columnName: generateColumnName(question.titles.en || "field"),
                                     })
                                 }
-                                className="text-[10px] text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 flex items-center gap-1 font-medium"
+                                className="text-[10px] text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 flex items-center gap-1 font-medium disabled:opacity-40 disabled:pointer-events-none"
                             >
                                 <Sparkles className="h-3 w-3" /> Auto-Format
                             </button>
@@ -141,7 +145,7 @@ export function BasicSettingsTab({
                             id="q-col-name"
                             placeholder="e.g. is_owner"
                             value={question.columnName || ""}
-                            disabled={isPublished}
+                            disabled={isPublished || isSystem}
                             onChange={(e) =>
                                 onChangeQuestion({
                                     ...question,
@@ -166,7 +170,7 @@ export function BasicSettingsTab({
                     <Switch
                         id="q-required"
                         checked={Boolean(question.validation.required)}
-                        disabled={isPublished}
+                        disabled={isPublished || isSystem}
                         onCheckedChange={(checked) =>
                             onChangeQuestion({
                                 ...question,

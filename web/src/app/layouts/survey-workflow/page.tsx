@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SurveyService } from "../survey-builder/services/survey-service";
 import { DEFAULT_SURVEY_STATUSES, QuestionModel, SurveyModel } from "../survey-builder/types/survey-schema";
+import { FARMER_ENROLLMENT, isFarmerEnrollment } from "../survey-builder/lib/system-fields";
 import {
     END_SURVEY_ID,
     TriggerType,
@@ -380,6 +381,11 @@ function StepDialog({ state, surveys, parentStatuses, parentQuestions, parentLab
     const set = (patch: Partial<WorkflowStep>) => setDraft((d) => ({ ...d, ...patch }));
     const isEnd = draft.surveyId === END_SURVEY_ID;
     const afterStart = draft.parentId === null;
+    // The step after Start registers the farmer, so it must be a Farmer Enrollment survey (it holds the system fields
+    // planning needs). A step saved before this rule keeps its survey, with a warning.
+    const choices = afterStart ? surveys.filter((s) => isFarmerEnrollment(s) || s.id === draft.surveyId) : surveys;
+    const picked = surveys.find((s) => s.id === draft.surveyId);
+    const notEnrollment = afterStart && picked !== undefined && !isFarmerEnrollment(picked);
     const dateQuestions = parentQuestions.filter((q) => q.type === "Date" || q.type === "DateRange");
     const qLabel = (q: QuestionModel) => q.titles.en || Object.values(q.titles)[0] || q.columnName || q.id;
     const canSave =
@@ -403,7 +409,7 @@ function StepDialog({ state, surveys, parentStatuses, parentQuestions, parentLab
                         <Select value={draft.surveyId} onValueChange={(v) => set({ surveyId: v })}>
                             <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Pick a survey…" /></SelectTrigger>
                             <SelectContent>
-                                {surveys.map((s) => (
+                                {choices.map((s) => (
                                     <SelectItem key={s.id} value={s.id} className="text-xs">Survey: {s.name}</SelectItem>
                                 ))}
                                 {!afterStart && (
@@ -413,6 +419,15 @@ function StepDialog({ state, surveys, parentStatuses, parentQuestions, parentLab
                                 )}
                             </SelectContent>
                         </Select>
+                        {afterStart && (
+                            <p className={cn("text-[11px]", notEnrollment || choices.length === 0 ? "text-rose-600" : "text-zinc-500")}>
+                                {notEnrollment
+                                    ? `${picked!.name} isn't a ${FARMER_ENROLLMENT} survey, so farmers it registers may have no plot location. Pick a ${FARMER_ENROLLMENT} survey.`
+                                    : choices.length === 0
+                                      ? `No ${FARMER_ENROLLMENT} survey yet. Create one in the Survey Builder with the ${FARMER_ENROLLMENT} category.`
+                                      : `The first survey registers the farmer, so only ${FARMER_ENROLLMENT} surveys are offered.`}
+                            </p>
+                        )}
                     </div>
 
                     {!afterStart && (
