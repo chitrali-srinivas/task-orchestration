@@ -88,6 +88,13 @@ const locationText = (f: MasterFieldDefinition, r: MasterRecord) => {
 /** Whether a field is asked for this record (e.g. visits per day only for surveyors). */
 const shownFor = (f: MasterFieldDefinition, r: MasterRecord) => !f.showWhen || r[f.showWhen.key] === f.showWhen.value;
 
+/** Whether a field must be filled in for this record (e.g. a surveyor's home). */
+const requiredFor = (f: MasterFieldDefinition, r: MasterRecord) => Boolean(f.requiredWhen) && r[f.requiredWhen!.key] === f.requiredWhen!.value;
+
+/** Whether a field has a value: a location needs both numbers, anything else non-blank text. */
+const filled = (f: MasterFieldDefinition, r: MasterRecord) =>
+    f.editor?.kind === "location" ? Boolean(pointOf(r[f.editor.latKey], r[f.editor.lngKey])) : Boolean(String(r[f.key] ?? "").trim());
+
 interface MasterTableProps {
     setId: string;
     name: string;
@@ -147,7 +154,12 @@ function MasterTable({ setId, name, itemName, description, fields, records, allR
                             <TableRow key={r.id}>
                                 {columns.map((f) => (
                                     <TableCell key={f.key} className="text-xs text-zinc-800 dark:text-zinc-200">
-                                        {(f.editor?.kind === "location" ? locationText(f, r) : r[f.key]) || <span className="text-zinc-300">—</span>}
+                                        {(f.editor?.kind === "location" ? locationText(f, r) : r[f.key]) ||
+                                            (requiredFor(f, r) ? (
+                                                <span className="font-medium text-rose-600" title={`Required for ${f.requiredWhen!.value.toLowerCase()}s`}>Missing</span>
+                                            ) : (
+                                                <span className="text-zinc-300">—</span>
+                                            ))}
                                     </TableCell>
                                 ))}
                                 <TableCell className="text-right">
@@ -205,7 +217,8 @@ function RecordDialog({ title, fields, allFields, initial, allRecords, onSave, o
     const badLocation = shown.some(
         (f) => f.editor?.kind === "location" && (draft[f.editor.latKey] || draft[f.editor.lngKey]) && !pointOf(draft[f.editor.latKey], draft[f.editor.lngKey])
     );
-    const canSave = Boolean(String(draft[firstKey] || "").trim()) && !badLocation;
+    const missing = shown.filter((f) => requiredFor(f, draft) && !filled(f, draft));
+    const canSave = Boolean(String(draft[firstKey] || "").trim()) && !badLocation && missing.length === 0;
     // Where a map opens when the record has no point yet: the first village with a centre.
     const near = useMemo(() => (allRecords.villages || []).map((v) => pointOf(v.lat, v.lng)).find(Boolean), [allRecords]);
 
@@ -245,8 +258,11 @@ function RecordDialog({ title, fields, allFields, initial, allRecords, onSave, o
                     {shown.map((f) => (
                         <div key={f.key} className="space-y-1">
                             <Label htmlFor={`m-${f.key}`} className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                                {f.label} {f.key === firstKey && <span className="text-rose-500">*</span>}
+                                {f.label} {(f.key === firstKey || requiredFor(f, draft)) && <span className="text-rose-500">*</span>}
                             </Label>
+                            {requiredFor(f, draft) && f.editor?.kind === "location" && (
+                                <p className="text-[11px] text-zinc-500">Required for {f.requiredWhen!.value.toLowerCase()}s: planning starts and ends their day here.</p>
+                            )}
                             {f.editor?.kind === "select" ? (
                                 <Select value={draft[f.key] || ""} onValueChange={(v) => set({ [f.key]: v })}>
                                     <SelectTrigger id={`m-${f.key}`} className="h-9 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>

@@ -32,6 +32,7 @@ import {
     FolderInput,
     FolderOutput,
     ChevronDown,
+    Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +62,7 @@ import { BackendQuestionType, QuestionModel } from "../../types/survey-schema";
 import { QUESTION_TYPE_REGISTRY } from "../../registry/question-type-registry";
 import { ValidationItem } from "../../lib/survey-validator";
 import { AddQuestionPopover } from "./add-question-popover";
+import { systemFieldOf } from "../../lib/system-fields";
 
 interface QuestionListItemProps {
     question: QuestionModel;
@@ -171,6 +173,8 @@ export function QuestionListItem({
 
     const formattedNum = String(question.number || index + 1).padStart(2, "0");
     const isRepeaterParent = question.type === "Repeater_QT" || Boolean(question.repeater?.isRepeater);
+    // System fields (lib/system-fields.ts) can't be duplicated, deleted or moved into a repeater.
+    const systemField = systemFieldOf(question);
     
     // Check if this is a nested child (either repeater child or conditional follow-up child)
     const depth = propDepth || question.followUpDepth || (question.displayIndex ? question.displayIndex.split(".").length : 1);
@@ -347,6 +351,15 @@ export function QuestionListItem({
                             />
                             <span className="truncate">{typeDescriptor?.displayName || question.type}</span>
                         </div>
+                        {systemField && (
+                            <Badge
+                                variant="outline"
+                                className="h-4 px-1 gap-0.5 text-[9px] font-semibold shrink-0 border-sky-200 dark:border-sky-900 text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/40"
+                                title={`System field: ${systemField.purpose}`}
+                            >
+                                <Lock className="h-2.5 w-2.5" /> System
+                            </Badge>
+                        )}
                     </div>
 
                     {/* Right Controls */}
@@ -448,7 +461,7 @@ export function QuestionListItem({
                                         </>
                                     )}
 
-                                    {!isRepeaterParent && !isChild && allRepeaters.length > 0 && onMoveToRepeater && (
+                                    {!isRepeaterParent && !isChild && !systemField && allRepeaters.length > 0 && onMoveToRepeater && (
                                         <>
                                             <DropdownMenuSub>
                                                 <DropdownMenuSubTrigger className="gap-2 cursor-pointer font-medium">
@@ -491,18 +504,22 @@ export function QuestionListItem({
                                         </>
                                     )}
 
-                                    <DropdownMenuItem
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onDuplicate(question.id);
-                                        }}
-                                        className="gap-2 cursor-pointer"
-                                    >
-                                        <Copy className="h-3.5 w-3.5 text-zinc-500" />
-                                        <span>Duplicate</span>
-                                    </DropdownMenuItem>
+                                    {!systemField && (
+                                        <>
+                                            <DropdownMenuItem
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onDuplicate(question.id);
+                                                }}
+                                                className="gap-2 cursor-pointer"
+                                            >
+                                                <Copy className="h-3.5 w-3.5 text-zinc-500" />
+                                                <span>Duplicate</span>
+                                            </DropdownMenuItem>
 
-                                    <DropdownMenuSeparator className="bg-zinc-100 dark:bg-zinc-800" />
+                                            <DropdownMenuSeparator className="bg-zinc-100 dark:bg-zinc-800" />
+                                        </>
+                                    )}
 
                                     <DropdownMenuItem
                                         disabled={isFirst}
@@ -528,18 +545,30 @@ export function QuestionListItem({
                                         <span>Move Down</span>
                                     </DropdownMenuItem>
 
-                                    <DropdownMenuSeparator className="bg-zinc-100 dark:bg-zinc-800" />
+                                    {systemField ? (
+                                        <>
+                                            <DropdownMenuSeparator className="bg-zinc-100 dark:bg-zinc-800" />
+                                            <div className="flex items-start gap-2 px-2 py-1.5 text-[11px] text-zinc-500">
+                                                <Lock className="h-3.5 w-3.5 shrink-0 mt-px" />
+                                                <span>System field: it can&apos;t be deleted or duplicated.</span>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <DropdownMenuSeparator className="bg-zinc-100 dark:bg-zinc-800" />
 
-                                    <DropdownMenuItem
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onDelete(question);
-                                        }}
-                                        className="gap-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/40 cursor-pointer"
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                        <span>Delete</span>
-                                    </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onDelete(question);
+                                                }}
+                                                className="gap-2 text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/40 cursor-pointer"
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                                <span>Delete</span>
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         )}

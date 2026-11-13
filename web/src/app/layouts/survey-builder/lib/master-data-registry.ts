@@ -26,6 +26,8 @@ export interface MasterFieldDefinition {
     defaultValue?: string;
     /** Only asked when another field has this value (e.g. visits per day only for surveyors). */
     showWhen?: { key: string; value: string };
+    /** Must be filled in when another field has this value (e.g. a surveyor's home, where planning starts their day). */
+    requiredWhen?: { key: string; value: string };
 }
 
 export interface MasterSetDefinition {
@@ -74,7 +76,7 @@ export const MASTER_DEFINITIONS: Omit<MasterSetDefinition, "sampleRecords">[] = 
             { key: "name", label: "Name", isSearchable: true },
             { key: "phone", label: "Phone", isSearchable: true, isSecondary: true },
             { key: "role", label: "Role", isSearchable: true, isSecondary: true, defaultValue: "Surveyor", editor: { kind: "select", options: [...USER_ROLES] } },
-            { key: "home", label: "Home location", editor: { kind: "location", latKey: "homeLat", lngKey: "homeLng" } },
+            { key: "home", label: "Home location", editor: { kind: "location", latKey: "homeLat", lngKey: "homeLng" }, requiredWhen: SURVEYOR_ONLY },
             { key: "homeLat", label: "Home latitude" },
             { key: "homeLng", label: "Home longitude" },
             { key: "baseVillage", label: "Base village", isSecondary: true, editor: { kind: "ref", setId: "villages", idKey: "baseVillageId" }, showWhen: SURVEYOR_ONLY },

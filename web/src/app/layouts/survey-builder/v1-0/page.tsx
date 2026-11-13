@@ -21,6 +21,7 @@ import { MOCK_AZS } from "../services/mock-surveys";
 import { SurveyService } from "../services/survey-service";
 import { generateColumnName, recalculateQuestionNumbers } from "../lib/survey-normalizer";
 import { validateSurvey, SurveyValidationResult, ValidationItem } from "../lib/survey-validator";
+import { isFarmerEnrollment, lockSystemFields, syncSystemFields, systemFieldOf } from "../lib/system-fields";
 import { QuestionListPanel } from "../components/question-list/question-list-panel";
 import { QuestionEditor } from "../components/editor/question-editor";
 import { MobilePreview } from "../components/preview/mobile-preview";
@@ -30,6 +31,16 @@ import { SurveyHubView } from "../components/hub/survey-hub-view";
 import { TranslationTableView } from "../components/table-view/translation-table-view";
 import { EditSurveyDetailsDialog } from "../components/header/edit-survey-details-dialog";
 import { AvailabilityManagerDialog } from "../components/scheduling/availability-manager-dialog";
+
+/**
+ * A draft's system fields in line with its category (Farmer Enrollment adds and locks name, village and plot boundary).
+ * Same object back when nothing changed. Published versions are never changed here; their next draft is.
+ */
+function withSystemFields(survey: SurveyModel): SurveyModel {
+    if (survey.status === "Published") return survey;
+    const synced = syncSystemFields(survey);
+    return synced === survey ? survey : { ...synced, questions: recalculateQuestionNumbers(synced.questions) };
+}
 
 export default function SurveyBuilderPage() {
     // Navigation Screen State: "hub" (surveys catalog) | "editor" (builder workspace)
@@ -164,15 +175,17 @@ export default function SurveyBuilderPage() {
 
     // Survey Switching & Creation
     const handleSelectSurvey = (surveyId: string) => {
-        const found = surveys.find((s) => s.id === surveyId);
-        if (found) {
+        const stored = surveys.find((s) => s.id === surveyId);
+        if (stored) {
+            // An enrollment draft opened for the first time gets its system fields (save to keep them).
+            const found = withSystemFields(stored);
             setCurrentSurvey(found);
             if (found.questions.length > 0) {
                 setSelectedQuestionId(found.questions[0].id);
             } else {
                 setSelectedQuestionId(null);
             }
-            setIsDirty(false);
+            setIsDirty(found !== stored);
             setRuntimeAnswers({});
             setCurrentScreen("editor");
         }
@@ -185,7 +198,8 @@ export default function SurveyBuilderPage() {
         defaultLocale: string;
         category?: string;
     }) => {
-        const newSurvey: SurveyModel = {
+        const enrollment = isFarmerEnrollment(payload);
+        const created: SurveyModel = {
             id: `srv_${Date.now()}`,
             name: payload.name,
             description: payload.description,
@@ -201,7 +215,8 @@ export default function SurveyBuilderPage() {
                     ? [{ code: payload.defaultLocale, label: payload.defaultLocale.toUpperCase(), isDefault: true }]
                     : []),
             ],
-            questions: [
+            // Farmer Enrollment surveys start with their system fields only (added below).
+            questions: enrollment ? [] : [
                 {
                     id: `q_1`,
                     number: 1,
@@ -225,6 +240,7 @@ export default function SurveyBuilderPage() {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
+        const newSurvey = withSystemFields(created);
 
         setSurveys((prev) => [newSurvey, ...prev]);
         setCurrentSurvey(newSurvey);
@@ -277,7 +293,7 @@ export default function SurveyBuilderPage() {
     // Fork Draft from Published
     const handleForkDraft = async () => {
         if (!currentSurvey) return;
-        const forked = await SurveyService.createDraftFromPublished(currentSurvey.id);
+        const forked = withSystemFields(await SurveyService.createDraftFromPublished(currentSurvey.id));
         setCurrentSurvey(forked);
         setSurveys((prev) => prev.map((s) => (s.id === forked.id ? forked : s)));
         setIsDirty(true);
@@ -317,7 +333,10 @@ export default function SurveyBuilderPage() {
         statuses?: string[];
     }) => {
         if (!currentSurvey) return;
-        const updated = await SurveyService.updateSurveyDetails(currentSurvey.id, details);
+        let updated = await SurveyService.updateSurveyDetails(currentSurvey.id, details);
+        // Switching to (or from) Farmer Enrollment adds (or releases) the system fields; keep that saved too.
+        const synced = withSystemFields(updated);
+        if (synced !== updated) updated = await SurveyService.saveDraft(updated.id, synced);
         setCurrentSurvey(updated);
         setSurveys((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
         setIsDirty(false);
@@ -354,7 +373,8 @@ export default function SurveyBuilderPage() {
     // Question Mutations
     const handleUpdateQuestion = (updatedQ: QuestionModel) => {
         if (!currentSurvey) return;
-        const updatedQuestions = currentSurvey.questions.map((q) => (q.id === updatedQ.id ? updatedQ : q));
+        // lockSystemFields undoes any edit a system field can't take (type, column, Required, logic, repeater).
+        const updatedQuestions = lockSystemFields(currentSurvey.questions.map((q) => (q.id === updatedQ.id ? updatedQ : q)));
         const recalculated = recalculateQuestionNumbers(updatedQuestions);
         setCurrentSurvey({
             ...currentSurvey,
@@ -412,6 +432,7 @@ export default function SurveyBuilderPage() {
         const index = currentSurvey.questions.findIndex((q) => q.id === questionId);
         if (index === -1) return;
         const targetQ = currentSurvey.questions[index];
+        if (systemFieldOf(targetQ)) return; // system fields can't be duplicated
 
         const newId = `q_${Date.now()}`;
         const duplicated: QuestionModel = {
@@ -438,6 +459,7 @@ export default function SurveyBuilderPage() {
 
     const handleDeleteQuestion = (questionId: string) => {
         if (!currentSurvey) return;
+        if (systemFieldOf(currentSurvey.questions.find((q) => q.id === questionId))) return; // system fields can't be deleted
         const remaining = currentSurvey.questions.filter((q) => q.id !== questionId);
         const recalculated = recalculateQuestionNumbers(remaining);
         setCurrentSurvey({
@@ -452,7 +474,7 @@ export default function SurveyBuilderPage() {
 
     const handleReorderQuestions = (reordered: QuestionModel[]) => {
         if (!currentSurvey) return;
-        const recalculated = recalculateQuestionNumbers(reordered);
+        const recalculated = recalculateQuestionNumbers(lockSystemFields(reordered));
         setCurrentSurvey({
             ...currentSurvey,
             questions: recalculated,
@@ -463,13 +485,13 @@ export default function SurveyBuilderPage() {
     const handleRestoreVersionAsDraft = (snapshot: SurveyModel | SurveyVersionSnapshot) => {
         if (!currentSurvey) return;
         const snap = "surveySnapshot" in snapshot ? snapshot.surveySnapshot : snapshot;
-        const restoredDraft: SurveyModel = {
+        const restoredDraft: SurveyModel = withSystemFields({
             ...JSON.parse(JSON.stringify(snap)),
             version: currentSurvey.version + 1,
             versionTag: `v${currentSurvey.version + 1}`,
             status: "Draft",
             updatedAt: new Date().toISOString(),
-        };
+        });
         setCurrentSurvey(restoredDraft);
         setSurveys((prev) => prev.map((s) => (s.id === restoredDraft.id ? restoredDraft : s)));
         setIsDirty(true);
@@ -537,7 +559,8 @@ export default function SurveyBuilderPage() {
                                     <div className="flex-1 min-w-0 h-full max-h-full overflow-hidden flex flex-col">
                                         <TranslationTableView
                                             survey={currentSurvey}
-                                            onUpdateSurvey={(updated) => {
+                                            onUpdateSurvey={(edited) => {
+                                                const updated = { ...edited, questions: lockSystemFields(edited.questions) };
                                                 setCurrentSurvey(updated);
                                                 setSurveys((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
                                                 setIsDirty(true);

@@ -1,6 +1,8 @@
 // TypeScript definitions for MATIC Survey Builder
 // Bridges normalized internal application model and legacy MATIC backend schema
 
+import type { SystemFieldKey } from "../lib/system-fields";
+
 export type QuestionCategory =
     | "choice"
     | "text"
@@ -121,6 +123,7 @@ export interface SerializedOptionJSON {
 
 export interface SerializedQuestionJSON {
     id: string;
+    systemKey?: SystemFieldKey;
     number: number;
     questionNumber?: string;
     displayIndex: string;
@@ -291,6 +294,8 @@ export interface AgeDependencyConfig {
 
 export interface QuestionModel {
     id: string;
+    /** Set on questions planning needs (lib/system-fields.ts): fixed in code, locked in the builder. */
+    systemKey?: SystemFieldKey;
     number: number;
     questionNumber?: string;
     displayIndex: string; // e.g. "1", "2", "8.1", "8.2"

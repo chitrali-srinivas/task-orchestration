@@ -24,6 +24,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { SurveyModel, DEFAULT_SURVEY_STATUSES } from "../../types/survey-schema";
 import { AZOption } from "../../services/mock-surveys";
+import { CategoryField } from "../common/category-field";
 
 interface EditSurveyDetailsDialogProps {
     open: boolean;
@@ -51,6 +52,7 @@ export function EditSurveyDetailsDialog({
 
     const [name, setName] = useState(survey.name);
     const [description, setDescription] = useState(survey.description || "");
+    const [category, setCategory] = useState(survey.category || "");
     const [defaultLocale, setDefaultLocale] = useState(survey.defaultLocale || "en");
     const [azId, setAzId] = useState(survey.azId || "");
     const [statuses, setStatuses] = useState<string[]>(survey.statuses?.length ? survey.statuses : [...DEFAULT_SURVEY_STATUSES]);
@@ -62,6 +64,7 @@ export function EditSurveyDetailsDialog({
         if (open) {
             setName(survey.name);
             setDescription(survey.description || "");
+            setCategory(survey.category || "");
             setDefaultLocale(survey.defaultLocale || "en");
             setAzId(survey.azId || "");
             setStatuses(survey.statuses?.length ? survey.statuses : [...DEFAULT_SURVEY_STATUSES]);
@@ -106,6 +109,7 @@ export function EditSurveyDetailsDialog({
             await onSaveDetails({
                 name: name.trim(),
                 description: description.trim() || undefined,
+                category: category || undefined,
                 defaultLocale,
                 azId,
                 statuses,
@@ -227,6 +231,8 @@ export function EditSurveyDetailsDialog({
                                 className="bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 min-h-[70px] text-xs resize-none"
                             />
                         </div>
+
+                        <CategoryField id="edit-category" value={category} onChange={setCategory} disabled={isPublished} />
 
                         {/* Survey statuses: the statuses a task (response) of this survey can move through */}
                         <div className="space-y-1.5">

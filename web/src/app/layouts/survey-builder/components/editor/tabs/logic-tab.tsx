@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { GitBranch, Plus, Trash2, Info } from "lucide-react";
+import { GitBranch, Plus, Trash2, Info, Lock } from "lucide-react";
+import { systemFieldOf } from "../../../lib/system-fields";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -54,6 +55,8 @@ export function LogicTab({
 
     const isEnabled = Boolean(visibility.enabled);
     const conditions = visibility.ruleGroup?.conditions || [];
+    // System fields are always shown: hiding one would leave the farmer without it.
+    const systemField = systemFieldOf(question);
     const conjunction = visibility.ruleGroup?.conjunction || "AND";
 
     // Eligible candidate questions that come strictly before this question
@@ -158,10 +161,17 @@ export function LogicTab({
 
                     <Switch
                         checked={isEnabled}
-                        disabled={isPublished || candidateQuestions.length === 0}
+                        disabled={isPublished || candidateQuestions.length === 0 || Boolean(systemField)}
                         onCheckedChange={handleToggleEnabled}
                     />
                 </div>
+
+                {systemField && (
+                    <div className="flex items-center gap-2 p-3 rounded-md bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs">
+                        <Lock className="h-4 w-4 shrink-0" />
+                        <span>{systemField.label} is a system field, so it is always shown. Other questions can still depend on it.</span>
+                    </div>
+                )}
 
                 {candidateQuestions.length === 0 && (
                     <div className="flex items-center gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs">

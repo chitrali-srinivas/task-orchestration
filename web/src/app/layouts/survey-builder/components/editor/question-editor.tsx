@@ -24,6 +24,7 @@ import { RepeaterTab } from "./tabs/repeater-tab";
 import { TranslationTab } from "./tabs/translation-tab";
 import { AdvancedTab } from "./tabs/advanced-tab";
 import { QuestionTypeHelpPopover } from "../common/question-type-help-popover";
+import { systemFieldOf } from "../../lib/system-fields";
 
 interface QuestionEditorProps {
     question: QuestionModel;
@@ -67,6 +68,7 @@ export function QuestionEditor({
     const isRepeaterType = question.type === "Repeater_QT" || Boolean(question.repeater?.isRepeater);
 
     const conditionCount = question.visibility.ruleGroup?.conditions?.length || 0;
+    const systemField = systemFieldOf(question);
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-zinc-900 min-w-0 w-full overflow-hidden">
@@ -94,6 +96,12 @@ export function QuestionEditor({
                             <Lock className="h-3 w-3" /> Read-Only
                         </Badge>
                     )}
+
+                    {systemField && (
+                        <Badge variant="outline" className="text-[10px] border-sky-200 dark:border-sky-900 text-sky-700 dark:text-sky-300 gap-1 bg-sky-50 dark:bg-sky-950/40" title={systemField.purpose}>
+                            <Lock className="h-3 w-3" /> System field
+                        </Badge>
+                    )}
                 </div>
 
                 {/* Header Action Buttons */}
@@ -102,7 +110,8 @@ export function QuestionEditor({
                         variant="ghost"
                         size="sm"
                         onClick={() => onDeleteQuestion(question)}
-                        disabled={isPublished}
+                        disabled={isPublished || Boolean(systemField)}
+                        title={systemField ? `${systemField.label} is a system field and can't be deleted` : undefined}
                         className="h-8 px-2.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 gap-1 disabled:opacity-40"
                     >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -211,6 +220,17 @@ export function QuestionEditor({
             {/* Active Tab Content Pane */}
             <div className="flex-1 overflow-y-auto min-h-0 p-5 bg-zinc-50/40 dark:bg-zinc-950/40">
                 <div className="max-w-4xl mx-auto">
+                    {systemField && (
+                        <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-sky-200 dark:border-sky-900 bg-sky-50/70 dark:bg-sky-950/30 p-3 text-xs text-sky-900 dark:text-sky-200">
+                            <Lock className="h-4 w-4 shrink-0 mt-0.5" />
+                            <div className="space-y-0.5">
+                                <p className="font-semibold">{systemField.label} is a system field. {systemField.purpose}</p>
+                                <p className="text-sky-800/80 dark:text-sky-300/80">
+                                    It can&apos;t be deleted, duplicated, given another type or column name, made optional, hidden by logic or put in a repeater. You can change its wording, hint, translations, position and limits.
+                                </p>
+                            </div>
+                        </div>
+                    )}
                     {activeTab === "basic" && (
                         <div className="space-y-6">
                             <BasicSettingsTab

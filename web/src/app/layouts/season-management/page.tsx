@@ -8,6 +8,7 @@ import {
     useReactTable,
 } from "@tanstack/react-table";
 import { NavBarType4 } from "@/components/nav-bars/NavBarType4";
+import { PageFooter } from "@/components/page-footer";
 import { columns as defaultColumns } from "./components/columns";
 import { SeasonTable } from "./components/season-table";
 import { SeasonToolbar } from "./components/season-toolbar";
@@ -20,7 +21,6 @@ import {
 } from "./components/season-filter-sidebar";
 import { SeasonRecord, SeasonQueryFilters } from "./data/schema";
 import { useSeasonDataSource, initialSeasons } from "./data/data-source";
-import { format } from "date-fns";
 import { useServerTable } from "@/lib/server-table";
 
 export default function SeasonManagementPage() {
@@ -431,28 +431,7 @@ export default function SeasonManagementPage() {
                     updatedByList={allUpdatedBy}
                 />
 
-                {/* Footer Section */}
-                <div className="shrink-0 py-3 px-1 border-t border-zinc-100 dark:border-zinc-800 mt-4">
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-[10px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-1.5">
-                                <span>All rights reserved by Mati Carbon Pvt</span>
-                                <button className="text-zinc-900 dark:text-zinc-300 hover:underline underline-offset-2 font-bold">TnC</button>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-1.5">
-                                <span className="opacity-50">Session ID:</span>
-                                <span className="font-mono text-zinc-600 dark:text-zinc-400">MC-SEASON-8824</span>
-                            </div>
-                            <span className="hidden sm:inline opacity-30">|</span>
-                            <div className="flex items-center gap-1.5">
-                                <span className="opacity-50">Last Refreshed:</span>
-                                <span className="text-zinc-600 dark:text-zinc-400" suppressHydrationWarning>{format(new Date(), "dd MMM yyyy, hh:mm aa")}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <PageFooter sessionId="MC-SEASON-8824" />
             </div>
         </NavBarType4>
     );

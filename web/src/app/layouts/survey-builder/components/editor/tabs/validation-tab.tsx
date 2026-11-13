@@ -32,6 +32,7 @@ import { QuestionModel } from "../../../types/survey-schema";
 import { getPresetsForQuestionType, getPresetById, VALIDATION_PRESETS } from "../../../lib/validation-presets";
 import { validateRegexSafety, testRegexPattern } from "../../../lib/regex-safety";
 import { RegexHelpPopover } from "./regex-help-popover";
+import { systemFieldOf } from "../../../lib/system-fields";
 import { DatePicker } from "@/components/ui/date-picker";
 
 interface ValidationTabProps {
@@ -113,7 +114,7 @@ export function ValidationTab({
                         <Switch
                             id="required-toggle"
                             checked={Boolean(val.required)}
-                            disabled={isPublished}
+                            disabled={isPublished || Boolean(systemFieldOf(question))}
                             onCheckedChange={(checked) => handleUpdate({ required: checked })}
                         />
                     </div>

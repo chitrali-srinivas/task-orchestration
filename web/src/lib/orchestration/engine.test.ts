@@ -84,10 +84,33 @@ test("farmer name and village come from the registration answers", () => {
     assert.deepEqual(farmerFromResponse([{ id: "q3", columnName: "mobile" }], {}, "Farmer 7"), { name: "Farmer 7", village: "" });
 });
 
-test("farmer location: the registration GPS point, else the plot boundary's centre", () => {
+test("farmer location: the plot boundary's centre, else a GPS point from older surveys", () => {
     const qs = [{ id: "q1", columnName: "farmer_name" }, { id: "q2", type: "PolygonBoundary" }, { id: "q3", type: "Map" }];
     const plot = { vertices: [{ lat: 21, lng: 77 }, { lat: 22, lng: 78 }] };
-    assert.deepEqual(farmerFromResponse(qs, { q1: "A", q2: plot, q3: { lat: 21.5, lng: 77.2, accuracy: 2 } }, "").location, { lat: 21.5, lng: 77.2, source: "gps" });
-    assert.deepEqual(farmerFromResponse(qs, { q1: "A", q2: plot }, "").location, { lat: 21.5, lng: 77.5, source: "plot" });
+    const gps = { lat: 21.5, lng: 77.2, accuracy: 2 };
+    assert.deepEqual(farmerFromResponse(qs, { q1: "A", q2: plot, q3: gps }, "").location, { lat: 21.5, lng: 77.5, source: "plot" });
+    assert.deepEqual(farmerFromResponse(qs, { q1: "A", q3: gps }, "").location, { lat: 21.5, lng: 77.2, source: "gps" });
     assert.equal("location" in farmerFromResponse(qs, { q1: "A" }, ""), false);
+});
+
+test("system fields win over guesses: tagged name, village and plot", () => {
+    const qs = [
+        { id: "father", type: "Subjective", columnName: "father_name", titles: { en: "Father's name" } },
+        { id: "other_plot", type: "PolygonBoundary" },
+        { id: "n", systemKey: "farmer.name" as const, type: "Subjective" },
+        { id: "v", systemKey: "farmer.village" as const, type: "Selected Dropdown" },
+        { id: "p", systemKey: "farmer.plot" as const, type: "PolygonBoundary" },
+    ];
+    const response = {
+        father: "Ramesh",
+        other_plot: { vertices: [{ lat: 10, lng: 70 }] },
+        n: "Sita",
+        v: { masterSetId: "villages", recordId: "v1", displayValue: "Rampur" },
+        p: { vertices: [{ lat: 21, lng: 77 }, { lat: 21.2, lng: 77.2 }] },
+    };
+    const f = farmerFromResponse(qs, response, "");
+    assert.equal(f.name, "Sita");
+    assert.equal(f.village, "Rampur");
+    assert.equal(f.location?.source, "plot");
+    assert.ok(Math.abs(f.location!.lat - 21.1) < 1e-9 && Math.abs(f.location!.lng - 77.1) < 1e-9);
 });
