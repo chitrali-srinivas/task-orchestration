@@ -31,6 +31,8 @@ interface EditSurveyDetailsDialogProps {
     onOpenChange: (open: boolean) => void;
     survey: SurveyModel;
     azs: AZOption[];
+    /** The built-in registration survey keeps its Farmer Enrollment category. */
+    lockCategory?: boolean;
     onSaveDetails: (updatedFields: {
         name: string;
         description?: string;
@@ -46,6 +48,7 @@ export function EditSurveyDetailsDialog({
     onOpenChange,
     survey,
     azs,
+    lockCategory = false,
     onSaveDetails,
 }: EditSurveyDetailsDialogProps) {
     const isPublished = survey.status === "Published";
@@ -232,7 +235,7 @@ export function EditSurveyDetailsDialog({
                             />
                         </div>
 
-                        <CategoryField id="edit-category" value={category} onChange={setCategory} disabled={isPublished} />
+                        <CategoryField id="edit-category" value={category} onChange={setCategory} disabled={isPublished || lockCategory} />
 
                         {/* Survey statuses: the statuses a task (response) of this survey can move through */}
                         <div className="space-y-1.5">

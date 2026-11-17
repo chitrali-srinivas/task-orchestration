@@ -7,7 +7,7 @@
 import * as React from "react";
 import type { TableDataSource } from "@/lib/server-table";
 import { useMockTableDataSource } from "@/mocks/server-table";
-import { STATUS, type Farmer, type Task } from "@/lib/orchestration/engine";
+import { DEFAULT_START_STATUS, FARMER_STATUS_LABEL, STATUS, farmerIdOf, type Farmer, type Task } from "@/lib/orchestration/engine";
 import { Job, Surveyor, isEditable, isOpen, lastJobByTask } from "@/lib/orchestration/jobs";
 import type { Workflow } from "@/app/layouts/survey-workflow/workflow-store";
 import { DEFAULT_SURVEY_STATUSES, SurveyModel } from "@/app/layouts/survey-builder/types/survey-schema";
@@ -32,7 +32,7 @@ export function buildTaskRecords(tasks: Task[], farmers: Farmer[], surveys: Surv
     const surveyorById = new Map(surveyors.map((s) => [s.id, s]));
     const jobRefs = lastJobByTask(jobs);
     return tasks.map((t) => {
-        const farmer = farmerById.get(t.farmerId);
+        const farmer = farmerById.get(farmerIdOf(t.subject) ?? "");
         const survey = surveyById.get(t.surveyId);
         const workflow = workflowById.get(t.workflowId);
         const parent = t.parentTaskId ? taskById.get(t.parentTaskId) : undefined;
@@ -51,12 +51,18 @@ export function buildTaskRecords(tasks: Task[], farmers: Farmer[], surveys: Surv
             surveyName: survey?.name || "(missing survey)",
             surveyVersion: survey?.version,
             workflowName: workflow?.name || "(missing workflow)",
-            farmerId: t.farmerId,
+            farmerId: farmerIdOf(t.subject) ?? "",
             farmerName: farmer?.name || "(unknown farmer)",
             village: farmer?.village || "",
             plannedStart: t.plannedStart,
             plannedEnd: t.plannedEnd || undefined,
-            createdFrom: parent ? `T${parent.taskNo} · ${statusLabel(onStatus || parent.status)}` : "Registration",
+            // A first step's task is created when the farmer reaches the workflow's start status; a task whose step is
+            // gone came from registration back when it was a workflow step.
+            createdFrom: parent
+                ? `T${parent.taskNo} · ${statusLabel(onStatus || parent.status)}`
+                : workflow?.steps.some((s) => s.id === t.stepId)
+                  ? `Start · farmer ${FARMER_STATUS_LABEL[workflow.startOn ?? DEFAULT_START_STATUS].toLowerCase()}`
+                  : "Registration",
             parentTaskId: t.parentTaskId,
             updatedAt: t.updatedAt,
             statusComment: t.statusComment,

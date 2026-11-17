@@ -21,7 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SurveyService } from "../survey-builder/services/survey-service";
 import { DEFAULT_SURVEY_STATUSES, QuestionModel, SurveyModel } from "../survey-builder/types/survey-schema";
-import { FARMER_ENROLLMENT, isFarmerEnrollment } from "../survey-builder/lib/system-fields";
+import { isRegistrationSurvey } from "../survey-builder/lib/system-fields";
+import { DEFAULT_START_STATUS, FARMER_STATUS_LABEL, START_STATUSES, type FarmerStatus } from "@/lib/orchestration/engine";
 import {
     END_SURVEY_ID,
     TriggerType,
@@ -194,8 +195,11 @@ interface EditorProps {
 /** What the step dialog is doing: adding a child under `parentId`, or editing `step`. */
 type StepDialogState = { mode: "add"; parentId: string | null } | { mode: "edit"; step: WorkflowStep };
 
-function WorkflowEditor({ workflow, surveys, onChange, onBack }: EditorProps) {
+function WorkflowEditor({ workflow, surveys: allSurveys, onChange, onBack }: EditorProps) {
     const [dialog, setDialog] = useState<StepDialogState | null>(null);
+    // The built-in Farmer Registration survey runs before any workflow, so it isn't a step.
+    const surveys = useMemo(() => allSurveys.filter((s) => !isRegistrationSurvey(s)), [allSurveys]);
+    const startOn = workflow.startOn ?? DEFAULT_START_STATUS;
     const surveyById = useMemo(() => new Map(surveys.map((s) => [s.id, s])), [surveys]);
     const surveyName = (id: string) => (id === END_SURVEY_ID ? "End" : surveyById.get(id)?.name || "(missing survey)");
     const statusesOf = (surveyId: string | null) => {
@@ -290,6 +294,7 @@ function WorkflowEditor({ workflow, surveys, onChange, onBack }: EditorProps) {
                         </h3>
                     </div>
                     <div className="space-y-2 p-3">
+                        <p className="text-[11px] text-zinc-500">Farmer Registration is built in: farmers register before any workflow, so it isn&apos;t listed here.</p>
                         {surveys.length === 0 ? (
                             <p className="text-[11px] text-zinc-500">
                                 No surveys yet. Create them in the{" "}
@@ -316,6 +321,22 @@ function WorkflowEditor({ workflow, surveys, onChange, onBack }: EditorProps) {
                             <li>
                                 <div className="flex flex-col items-center gap-1.5">
                                     <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500 text-xs font-bold text-white shadow-2xs">Start</div>
+                                    {/* Which farmer status starts this workflow for a farmer (verified by default). */}
+                                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-300">
+                                        <span>when the farmer is</span>
+                                        <Select value={startOn} onValueChange={(v) => onChange({ ...workflow, startOn: v as FarmerStatus })}>
+                                            <SelectTrigger className="h-7 w-[130px] text-[11px]" aria-label="Farmer status that starts this workflow">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {START_STATUSES.map((st) => (
+                                                    <SelectItem key={st} value={st} className="text-xs">
+                                                        {FARMER_STATUS_LABEL[st]}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                     <button
                                         type="button"
                                         onClick={() => setDialog({ mode: "add", parentId: null })}
@@ -330,7 +351,7 @@ function WorkflowEditor({ workflow, surveys, onChange, onBack }: EditorProps) {
                         </ul>
                     </div>
                     {roots.length === 0 && (
-                        <p className="pt-6 text-center text-xs text-zinc-500">Click + under Start to add the first survey.</p>
+                        <p className="pt-6 text-center text-xs text-zinc-500">Click + under Start to add the first survey. It becomes a task for each farmer once they&apos;re {FARMER_STATUS_LABEL[startOn].toLowerCase()} (while the workflow is active).</p>
                     )}
                 </div>
             </div>
@@ -381,11 +402,6 @@ function StepDialog({ state, surveys, parentStatuses, parentQuestions, parentLab
     const set = (patch: Partial<WorkflowStep>) => setDraft((d) => ({ ...d, ...patch }));
     const isEnd = draft.surveyId === END_SURVEY_ID;
     const afterStart = draft.parentId === null;
-    // The step after Start registers the farmer, so it must be a Farmer Enrollment survey (it holds the system fields
-    // planning needs). A step saved before this rule keeps its survey, with a warning.
-    const choices = afterStart ? surveys.filter((s) => isFarmerEnrollment(s) || s.id === draft.surveyId) : surveys;
-    const picked = surveys.find((s) => s.id === draft.surveyId);
-    const notEnrollment = afterStart && picked !== undefined && !isFarmerEnrollment(picked);
     const dateQuestions = parentQuestions.filter((q) => q.type === "Date" || q.type === "DateRange");
     const qLabel = (q: QuestionModel) => q.titles.en || Object.values(q.titles)[0] || q.columnName || q.id;
     const canSave =
@@ -409,7 +425,7 @@ function StepDialog({ state, surveys, parentStatuses, parentQuestions, parentLab
                         <Select value={draft.surveyId} onValueChange={(v) => set({ surveyId: v })}>
                             <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Pick a survey…" /></SelectTrigger>
                             <SelectContent>
-                                {choices.map((s) => (
+                                {surveys.map((s) => (
                                     <SelectItem key={s.id} value={s.id} className="text-xs">Survey: {s.name}</SelectItem>
                                 ))}
                                 {!afterStart && (
@@ -419,15 +435,6 @@ function StepDialog({ state, surveys, parentStatuses, parentQuestions, parentLab
                                 )}
                             </SelectContent>
                         </Select>
-                        {afterStart && (
-                            <p className={cn("text-[11px]", notEnrollment || choices.length === 0 ? "text-rose-600" : "text-zinc-500")}>
-                                {notEnrollment
-                                    ? `${picked!.name} isn't a ${FARMER_ENROLLMENT} survey, so farmers it registers may have no plot location. Pick a ${FARMER_ENROLLMENT} survey.`
-                                    : choices.length === 0
-                                      ? `No ${FARMER_ENROLLMENT} survey yet. Create one in the Survey Builder with the ${FARMER_ENROLLMENT} category.`
-                                      : `The first survey registers the farmer, so only ${FARMER_ENROLLMENT} surveys are offered.`}
-                            </p>
-                        )}
                     </div>
 
                     {!afterStart && (

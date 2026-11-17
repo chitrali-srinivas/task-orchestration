@@ -67,6 +67,10 @@ interface SurveyHeaderProps {
     onViewChange?: (view: "builder" | "table") => void;
     onOpenEditDetails?: () => void;
     onDuplicateSurvey?: () => void;
+    /** The built-in Farmer Registration survey: can't be duplicated; shown with a badge. */
+    builtIn?: boolean;
+    /** False when the current role may not edit this survey (built-in surveys: Super Admin only). */
+    canEdit?: boolean;
     onOpenAvailabilityManager?: () => void;
     onSave: () => Promise<void>;
     onPublish: (changeSummary: string) => Promise<void>;
@@ -93,6 +97,8 @@ export function SurveyHeader({
     onViewChange,
     onOpenEditDetails,
     onDuplicateSurvey,
+    builtIn = false,
+    canEdit = true,
     onOpenAvailabilityManager,
     onSave,
     onPublish,
@@ -379,8 +385,17 @@ export function SurveyHeader({
                     {/* Separator on left of Save button */}
                     <div className="h-4 w-px bg-zinc-200 dark:border-zinc-800 shrink-0 mx-0.5" />
 
-                    {/* Save Draft / Fork New Draft */}
-                    {isPublished ? (
+                    {builtIn && (
+                        <span
+                            className="inline-flex h-7 items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 text-[11px] font-semibold text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300"
+                            title="Built in: every farmer starts with this survey. Only a Super Admin can edit it; its system fields stay locked."
+                        >
+                            <Lock className="h-3 w-3" /> Built in{!canEdit && " · Super Admin only"}
+                        </span>
+                    )}
+
+                    {/* Save Draft / Fork New Draft (not offered to a role that can't edit this survey) */}
+                    {!canEdit ? null : isPublished ? (
                         <Button
                             size="sm"
                             onClick={onForkDraft}
@@ -403,7 +418,7 @@ export function SurveyHeader({
                     )}
 
                     {/* Publish Button */}
-                    {!isPublished && (
+                    {!isPublished && canEdit && (
                         <Button
                             size="sm"
                             disabled={isPublishing}
@@ -447,7 +462,7 @@ export function SurveyHeader({
                                     Edit Survey Details
                                 </DropdownMenuItem>
                             )}
-                            {onDuplicateSurvey && (
+                            {onDuplicateSurvey && !builtIn && (
                                 <DropdownMenuItem onClick={onDuplicateSurvey} className="gap-2 text-xs cursor-pointer">
                                     <Copy className="h-4 w-4 text-zinc-500" />
                                     Duplicate Survey

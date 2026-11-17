@@ -21,7 +21,8 @@ import { MOCK_AZS } from "../services/mock-surveys";
 import { SurveyService } from "../services/survey-service";
 import { generateColumnName, recalculateQuestionNumbers } from "../lib/survey-normalizer";
 import { validateSurvey, SurveyValidationResult, ValidationItem } from "../lib/survey-validator";
-import { isFarmerEnrollment, lockSystemFields, syncSystemFields, systemFieldOf } from "../lib/system-fields";
+import { isRegistrationSurvey, lockSystemFields, syncSystemFields, systemFieldOf } from "../lib/system-fields";
+import { canEditSystemSurveys, useCurrentRole } from "@/lib/current-role";
 import { QuestionListPanel } from "../components/question-list/question-list-panel";
 import { QuestionEditor } from "../components/editor/question-editor";
 import { MobilePreview } from "../components/preview/mobile-preview";
@@ -33,8 +34,8 @@ import { EditSurveyDetailsDialog } from "../components/header/edit-survey-detail
 import { AvailabilityManagerDialog } from "../components/scheduling/availability-manager-dialog";
 
 /**
- * A draft's system fields in line with its category (Farmer Enrollment adds and locks name, village and plot boundary).
- * Same object back when nothing changed. Published versions are never changed here; their next draft is.
+ * A draft's system fields in line: the built-in registration survey keeps name, village and plot boundary locked; any
+ * other survey has none. Same object back when nothing changed. Published versions aren't changed; their next draft is.
  */
 function withSystemFields(survey: SurveyModel): SurveyModel {
     if (survey.status === "Published") return survey;
@@ -79,6 +80,12 @@ export default function SurveyBuilderPage() {
 
     // Simulated Runtime State
     const [runtimeAnswers, setRuntimeAnswers] = useState<Record<string, any>>({});
+
+    // The built-in Farmer Registration survey is edited only by a Super Admin (role from the user menu).
+    const role = useCurrentRole();
+    const builtIn = isRegistrationSurvey(currentSurvey ?? undefined);
+    const canEdit = !builtIn || canEditSystemSurveys(role);
+    const readOnly = !currentSurvey || currentSurvey.status === "Published" || !canEdit;
 
     // Load surveys when AZ changes
     useEffect(() => {
@@ -198,7 +205,6 @@ export default function SurveyBuilderPage() {
         defaultLocale: string;
         category?: string;
     }) => {
-        const enrollment = isFarmerEnrollment(payload);
         const created: SurveyModel = {
             id: `srv_${Date.now()}`,
             name: payload.name,
@@ -215,8 +221,7 @@ export default function SurveyBuilderPage() {
                     ? [{ code: payload.defaultLocale, label: payload.defaultLocale.toUpperCase(), isDefault: true }]
                     : []),
             ],
-            // Farmer Enrollment surveys start with their system fields only (added below).
-            questions: enrollment ? [] : [
+            questions: [
                 {
                     id: `q_1`,
                     number: 1,
@@ -292,7 +297,7 @@ export default function SurveyBuilderPage() {
 
     // Fork Draft from Published
     const handleForkDraft = async () => {
-        if (!currentSurvey) return;
+        if (!currentSurvey || !canEdit) return;
         const forked = withSystemFields(await SurveyService.createDraftFromPublished(currentSurvey.id));
         setCurrentSurvey(forked);
         setSurveys((prev) => prev.map((s) => (s.id === forked.id ? forked : s)));
@@ -303,7 +308,7 @@ export default function SurveyBuilderPage() {
 
     // Duplicate Survey into new identity (v1 Draft)
     const handleDuplicateSurvey = async () => {
-        if (!currentSurvey) return;
+        if (!currentSurvey || builtIn) return; // the built-in survey can't be duplicated
         setIsSaving(true);
         try {
             const duplicated = await SurveyService.duplicateSurvey(currentSurvey.id);
@@ -540,8 +545,10 @@ export default function SurveyBuilderPage() {
                                 onTogglePreviewPanel={togglePreview}
                                 currentView={currentView}
                                 onViewChange={setCurrentView}
-                                onOpenEditDetails={() => setEditDetailsOpen(true)}
+                                onOpenEditDetails={canEdit ? () => setEditDetailsOpen(true) : undefined}
                                 onDuplicateSurvey={handleDuplicateSurvey}
+                                builtIn={builtIn}
+                                canEdit={canEdit}
                                 onOpenAvailabilityManager={() => setAvailabilityManagerOpen(true)}
                                 onSave={handleSaveDraft}
                                 onPublish={handlePublishSurvey}
@@ -566,7 +573,7 @@ export default function SurveyBuilderPage() {
                                                 setIsDirty(true);
                                             }}
                                             onOpenLanguageManager={() => setLanguageManagerOpen(true)}
-                                            isPublished={currentSurvey.status === "Published"}
+                                            isPublished={readOnly}
                                         />
                                     </div>
 
@@ -631,7 +638,7 @@ export default function SurveyBuilderPage() {
                                                 selectedQuestionId={selectedQuestionId}
                                                 errorQuestionIds={errorQuestionIds}
                                                 validationErrors={validation.errors}
-                                                isPublished={currentSurvey.status === "Published"}
+                                                isPublished={readOnly}
                                                 onSelectQuestion={setSelectedQuestionId}
                                                 onAddQuestion={handleAddQuestion}
                                                 onDuplicateQuestion={(qId) => handleDuplicateQuestion(qId)}
@@ -665,7 +672,7 @@ export default function SurveyBuilderPage() {
                                                     onOpenLanguageManager={() => setLanguageManagerOpen(true)}
                                                     onUpdateSurveyQuestions={handleReorderQuestions}
                                                     onSelectQuestion={setSelectedQuestionId}
-                                                    isPublished={currentSurvey.status === "Published"}
+                                                    isPublished={readOnly}
                                                 />
                                             ) : (
                                                 <div className="flex flex-col items-center justify-center h-full p-8 text-center text-zinc-500 space-y-3">
@@ -722,6 +729,7 @@ export default function SurveyBuilderPage() {
                 {/* Edit Survey Details Dialog */}
                 {currentSurvey && (
                     <EditSurveyDetailsDialog
+                        lockCategory={builtIn}
                         open={editDetailsOpen}
                         onOpenChange={setEditDetailsOpen}
                         survey={currentSurvey}
@@ -737,7 +745,7 @@ export default function SurveyBuilderPage() {
                         onOpenChange={setAvailabilityManagerOpen}
                         survey={currentSurvey}
                         onUpdateAvailability={handleUpdateAvailability}
-                        isPublished={currentSurvey.status === "Published"}
+                        isPublished={readOnly}
                     />
                 )}
             </div>

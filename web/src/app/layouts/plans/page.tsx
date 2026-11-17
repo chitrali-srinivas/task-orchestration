@@ -244,7 +244,7 @@ export default function TaskPlanningPage() {
                         setJobs(deleteCreatedJob(selectedId));
                         setIsSheetOpen(false);
                     }}
-                    onSaveOrder={(farmerIds) => selectedId && setJobs(saveJobOrder(selectedId, farmerIds))}
+                    onSaveOrder={(keys) => selectedId && setJobs(saveJobOrder(selectedId, keys))}
                     onChangeSurveyor={(surveyorId) => selectedId && setJobs(changeJobSurveyor(selectedId, surveyorId))}
                     onAddTasks={(taskIds) => selectedRecord && setJobs(addTasksToJob(taskIds, selectedRecord.surveyorId, selectedRecord.date))}
                     onMoveTasks={(taskIds, surveyorId) => selectedRecord && setJobs(addTasksToJob(taskIds, surveyorId, selectedRecord.date))}

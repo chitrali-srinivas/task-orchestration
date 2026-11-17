@@ -18,7 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
-import { STATUS, type Farmer, type LatLng, type LocationSource, type Task } from "@/lib/orchestration/engine"
+import { STATUS, farmerIdOf, type Farmer, type LatLng, type LocationSource, type Subject, type Task } from "@/lib/orchestration/engine"
 import {
     DEFAULT_MAX_VISITS,
     EFFORT,
@@ -38,7 +38,8 @@ import {
     jobEffort,
     openJobFor,
     openJobsByTask,
-    stopLocation,
+    stopKey,
+    subjectLocation,
     unfinishedStops,
     visitableOn,
 } from "@/lib/orchestration/jobs"
@@ -134,7 +135,8 @@ interface JobDetailSheetProps {
     onDelete: () => void
     onCloseSheet: (reasons: Record<number, string>) => void
     /** Save a rearranged order (farmer ids, every stop once). */
-    onSaveOrder: (farmerIds: string[]) => void
+    /** Stop keys (jobs.ts stopKey) in the new order. */
+    onSaveOrder: (keys: string[]) => void
     onChangeSurveyor: (surveyorId: string) => void
     /** Add tasks to this job (moving them off another job that isn't accepted yet). */
     onAddTasks: (taskIds: string[]) => void
@@ -194,16 +196,18 @@ function JobWorkspace({
     const startLetter = start?.kind === "home" ? "H" : "B"
     const maxVisits = surveyor?.maxVisitsPerDay ?? DEFAULT_MAX_VISITS
     const code = (id: string) => (taskById.get(id) ? `T${taskById.get(id)!.taskNo}` : "?")
-    const farmerName = (id: string) => farmerById.get(id)?.name ?? "(unknown farmer)"
+    // Stops are identified by their subject (a farmer today): stopKey gives one string per subject.
+    const keyOf = (s: { subject: Subject }) => stopKey(s.subject)
+    const subjectName = (subject: Subject) => (subject.kind === "farmer" ? farmerById.get(subject.id)?.name ?? "(unknown farmer)" : subject.id)
     const surveyorName = (id: string) => surveyorById.get(id)?.name ?? "removed surveyor"
-    const locate = (farmerId: string) => stopLocation(farmerById.get(farmerId), villages)
-    const effortOf = (stops: JobStop[], from?: LatLng) => jobEffort(stops.map((s) => locate(s.farmerId)), stops.map((s) => s.taskIds.length), from)
+    const locate = (subject: Subject) => subjectLocation(subject, farmerById, villages)
+    const effortOf = (stops: JobStop[], from?: LatLng) => jobEffort(stops.map((s) => locate(s.subject)), stops.map((s) => s.taskIds.length), from)
 
     // What the rim and the map show: the saved order, or the order being rearranged.
-    const byFarmer = new Map(job.stops.map((s) => [s.farmerId, s]))
+    const byKey = new Map(job.stops.map((s) => [keyOf(s), s]))
     const draftOrder =
-        editable && draft?.jobId === job.id && draft.order.length === job.stops.length && draft.order.every((id) => byFarmer.has(id)) ? draft.order : null
-    const shown = draftOrder ? draftOrder.map((id) => byFarmer.get(id)!) : job.stops
+        editable && draft?.jobId === job.id && draft.order.length === job.stops.length && draft.order.every((k) => byKey.has(k)) ? draft.order : null
+    const shown = draftOrder ? draftOrder.map((k) => byKey.get(k)!) : job.stops
     const savedEffort = effortOf(job.stops, base)
     const effort = effortOf(shown, base)
     const best = bestOrder(job.stops, { locate, base })
@@ -214,18 +218,18 @@ function JobWorkspace({
     /** The nodes a road route runs through: the base, the stops that have a location, back to the base. */
     const routePoints = (stops: JobStop[], from?: LatLng) => {
         const points: LatLng[] = stops.flatMap((s) => {
-            const p = locate(s.farmerId)
+            const p = locate(s.subject)
             return p ? [p] : []
         })
         return points.length === 0 ? [] : [...(from ? [from] : []), ...points, ...(from ? [from] : [])]
     }
 
-    const located = shown.map((s) => locate(s.farmerId))
+    const located = shown.map((s) => locate(s.subject))
     const stopDone = (stop: JobStop) => stop.taskIds.every((id) => taskById.get(id)?.status !== STATUS.planned)
     const unfinished = unfinishedStops(job, tasks)
     const route = [start ? start.label[0].toUpperCase() + start.label.slice(1) : null, ...shown.map((_, i) => String(i + 1)), start?.kind ?? null].filter(Boolean).join(" → ")
-    /** A farmer not on the job yet takes a visit; the job may be full. */
-    const fullFor = (farmerId: string) => job.stops.length >= maxVisits && !byFarmer.has(farmerId)
+    /** A subject not on the job yet takes a visit; the job may be full. */
+    const fullFor = (key: string) => job.stops.length >= maxVisits && !byKey.has(key)
 
     // Tasks due on the job's day it could take: unassigned ones, and ones on another job the surveyor hasn't accepted.
     const held = openJobsByTask(jobs)
@@ -239,7 +243,7 @@ function JobWorkspace({
     const matches = q
         ? pool
               .filter(({ task }) => {
-                  const f = farmerById.get(task.farmerId)
+                  const f = farmerById.get(farmerIdOf(task.subject) ?? "")
                   return `t${task.taskNo} ${task.taskNo} ${f?.name ?? ""} ${f?.village ?? ""}`.toLowerCase().includes(q)
               })
               .slice(0, 8)
@@ -252,7 +256,7 @@ function JobWorkspace({
 
     // Map: stops, legs (labelled when they have length), candidates.
     const mapStops: MapStop[] = shown.flatMap((s, i) =>
-        located[i] ? [{ key: `s:${s.farmerId}`, no: i + 1, label: farmerName(s.farmerId), location: located[i]!, done: stopDone(s) }] : []
+        located[i] ? [{ key: `s:${keyOf(s)}`, no: i + 1, label: subjectName(s.subject), location: located[i]!, done: stopDone(s) }] : []
     )
     const nodes = [...(base ? [{ key: "base", at: base }] : []), ...mapStops.map((s) => ({ key: s.key, at: s.location })), ...(base && mapStops.length > 0 ? [{ key: "base-end", at: base }] : [])]
     // Road routes: the order shown, the saved order while rearranging, and the order from another surveyor's base while
@@ -336,22 +340,23 @@ function JobWorkspace({
         const path = roadLeg && roadLeg.path.length > 1 ? roadLeg.path : [from.at, n.at]
         return km < 0.05 ? [] : [{ key: `${from.key}>${n.key}`, from: from.at, to: n.at, labelAt: labelAt(path, km), label: legText(km, roadLeg?.minutes ?? driveMinutes(km)) }]
     })
-    const addLabel = (farmerId: string, verb: string) => (editable && !fullFor(farmerId) ? `${verb} to ${record.jobCode}` : undefined)
-    const unassignedFarmers = Array.from(new Set(pool.filter((p) => !p.holder).map((p) => p.task.farmerId)))
+    const addLabel = (key: string, verb: string) => (editable && !fullFor(key) ? `${verb} to ${record.jobCode}` : undefined)
+    // Candidate keys are "u|<stop key>" and "o|<job id>|<stop key>" (stop keys contain ":").
+    const unassigned = Array.from(new Map(pool.filter((p) => !p.holder).map((p) => [keyOf(p.task), p.task.subject] as const)).entries())
     const candidates: MapCandidate[] = [
         ...(editable
-            ? unassignedFarmers.flatMap((farmerId) => {
-                  const loc = locate(farmerId)
-                  const ids = pool.filter((p) => !p.holder && p.task.farmerId === farmerId).map((p) => p.task.id)
+            ? unassigned.flatMap(([key, subject]) => {
+                  const loc = locate(subject)
+                  const ids = pool.filter((p) => !p.holder && keyOf(p.task) === key).map((p) => p.task.id)
                   return loc
                       ? [
                             {
-                                key: `u:${farmerId}`,
-                                label: farmerName(farmerId),
-                                detail: `${ids.map(code).join(", ")} · unassigned${fullFor(farmerId) ? ` · ${record.jobCode} is full` : ""}`,
+                                key: `u|${key}`,
+                                label: subjectName(subject),
+                                detail: `${ids.map(code).join(", ")} · unassigned${fullFor(key) ? ` · ${record.jobCode} is full` : ""}`,
                                 location: loc,
                                 kind: "unassigned" as const,
-                                actionLabel: addLabel(farmerId, "Add"),
+                                actionLabel: addLabel(key, "Add"),
                             },
                         ]
                       : []
@@ -360,16 +365,16 @@ function JobWorkspace({
         ...(showOtherJobs
             ? otherJobs.flatMap((j) =>
                   j.stops.flatMap((s) => {
-                      const loc = locate(s.farmerId)
+                      const loc = locate(s.subject)
                       return loc
                           ? [
                                 {
-                                    key: `o:${j.id}:${s.farmerId}`,
-                                    label: farmerName(s.farmerId),
+                                    key: `o|${j.id}|${keyOf(s)}`,
+                                    label: subjectName(s.subject),
                                     detail: `On J${j.jobNo} · ${surveyorName(j.surveyorId)}`,
                                     location: loc,
                                     kind: "other-job" as const,
-                                    actionLabel: isEditable(j) ? addLabel(s.farmerId, "Move") : undefined,
+                                    actionLabel: isEditable(j) ? addLabel(keyOf(s), "Move") : undefined,
                                 },
                             ]
                           : []
@@ -378,16 +383,16 @@ function JobWorkspace({
             : []),
     ]
     const pickCandidate = (key: string) => {
-        const [kind, a, b] = key.split(":")
-        if (kind === "u") onAddTasks(pool.filter((p) => !p.holder && p.task.farmerId === a).map((p) => p.task.id))
-        if (kind === "o") onAddTasks(jobs.find((j) => j.id === a)?.stops.find((s) => s.farmerId === b)?.taskIds ?? [])
+        const [kind, a, b] = key.split("|")
+        if (kind === "u") onAddTasks(pool.filter((p) => !p.holder && keyOf(p.task) === a).map((p) => p.task.id))
+        if (kind === "o") onAddTasks(jobs.find((j) => j.id === a)?.stops.find((s) => keyOf(s) === b)?.taskIds ?? [])
     }
     const selectStop = (key: string) => {
         setActiveKey(key)
         document.getElementById(`job-stop-${key}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" })
     }
     const moveInDraft = (i: number, to: number) => {
-        const order = shown.map((s) => s.farmerId)
+        const order = shown.map(keyOf)
         const [id] = order.splice(i, 1)
         order.splice(to, 0, id)
         setDraft({ jobId: job.id, order })
@@ -485,12 +490,12 @@ function JobWorkspace({
                                         </div>
                                     )}
                                     {shown.map((stop, i) => {
-                                        const key = `s:${stop.farmerId}`
-                                        const farmer = farmerById.get(stop.farmerId)
+                                        const key = `s:${keyOf(stop)}`
+                                        const farmer = farmerById.get(farmerIdOf(stop.subject) ?? "")
                                         const done = stopDone(stop)
                                         return (
-                                            <React.Fragment key={stop.farmerId}>
-                                                {(base || i > 0) && connector(legInfo(i).km, legInfo(i).min, `leg-${stop.farmerId}`)}
+                                            <React.Fragment key={keyOf(stop)}>
+                                                {(base || i > 0) && connector(legInfo(i).km, legInfo(i).min, `leg-${keyOf(stop)}`)}
                                                 <div
                                                     id={`job-stop-${key}`}
                                                     onClick={() => setActiveKey(key)}
@@ -565,7 +570,7 @@ function JobWorkspace({
                                                                                 {moveJobs.map((j) => {
                                                                                     const s = surveyorById.get(j.surveyorId)
                                                                                     const max = s?.maxVisitsPerDay ?? DEFAULT_MAX_VISITS
-                                                                                    const full = j.stops.length >= max && !j.stops.some((x) => x.farmerId === stop.farmerId)
+                                                                                    const full = j.stops.length >= max && !j.stops.some((x) => keyOf(x) === keyOf(stop))
                                                                                     return (
                                                                                         <DropdownMenuItem key={j.id} disabled={full} onSelect={() => onMoveTasks([taskId], j.surveyorId)}>
                                                                                             J{j.jobNo} · {s?.name ?? "?"}
@@ -751,7 +756,7 @@ function JobWorkspace({
                                                     <button
                                                         type="button"
                                                         className="text-[11px] font-semibold text-sky-700 hover:underline dark:text-sky-400"
-                                                        onClick={() => setDraft({ jobId: job.id, order: best.map((s) => s.farmerId) })}
+                                                        onClick={() => setDraft({ jobId: job.id, order: best.map(keyOf) })}
                                                     >
                                                         Use the shortest order
                                                     </button>
@@ -764,7 +769,7 @@ function JobWorkspace({
                                                             : "This is already the shortest order by straight-line distance."}
                                                     </p>
                                                     <div className="flex gap-2">
-                                                        <Button variant="outline" size="sm" className="h-8 flex-1 text-xs" onClick={() => setDraft({ jobId: job.id, order: job.stops.map((s) => s.farmerId) })}>
+                                                        <Button variant="outline" size="sm" className="h-8 flex-1 text-xs" onClick={() => setDraft({ jobId: job.id, order: job.stops.map(keyOf) })}>
                                                             Rearrange
                                                         </Button>
                                                         <Button
@@ -772,7 +777,7 @@ function JobWorkspace({
                                                             size="sm"
                                                             className="h-8 flex-1 text-xs"
                                                             disabled={!bestSaves}
-                                                            onClick={() => setDraft({ jobId: job.id, order: best.map((s) => s.farmerId) })}
+                                                            onClick={() => setDraft({ jobId: job.id, order: best.map(keyOf) })}
                                                         >
                                                             <Shuffle className="mr-1.5 h-3.5 w-3.5" />
                                                             Preview shortest
@@ -795,8 +800,8 @@ function JobWorkspace({
                                                     <p className="px-3 py-2 text-[11px] text-zinc-500">No task due on {formatYmd(job.date)} matches. Tasks on accepted jobs can&apos;t be added.</p>
                                                 ) : (
                                                     matches.map(({ task, holder }) => {
-                                                        const full = fullFor(task.farmerId)
-                                                        const f = farmerById.get(task.farmerId)
+                                                        const full = fullFor(keyOf(task))
+                                                        const f = farmerById.get(farmerIdOf(task.subject) ?? "")
                                                         return (
                                                             <button
                                                                 key={task.id}
@@ -813,7 +818,7 @@ function JobWorkspace({
                                                                 </span>
                                                                 <span className="truncate text-[10px] text-zinc-500">
                                                                     {f?.name ?? "?"} · {f?.village || "No village"} ·{" "}
-                                                                    {full ? `${record.jobCode} is full` : holder ? `on J${holder.jobNo}, moves here` : locate(task.farmerId) ? "unassigned" : "no location"}
+                                                                    {full ? `${record.jobCode} is full` : holder ? `on J${holder.jobNo}, moves here` : locate(task.subject) ? "unassigned" : "no location"}
                                                                 </span>
                                                             </button>
                                                         )
@@ -901,7 +906,7 @@ function JobWorkspace({
                     doneStops={job.stops.length - unfinished.length}
                     unfinished={unfinished.map((i) => ({
                         index: i,
-                        farmerName: farmerName(job.stops[i].farmerId),
+                        farmerName: subjectName(job.stops[i].subject),
                         taskCodes: job.stops[i].taskIds.filter((id) => taskById.get(id)?.status === STATUS.planned).map(code).join(", "),
                     }))}
                     onClose={() => setClosing(false)}

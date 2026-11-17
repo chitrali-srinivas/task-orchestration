@@ -10,6 +10,8 @@ import {
     MOCK_AZS,
 } from "./mock-surveys";
 import { computeSurveyDiff, SurveyVersionDiff } from "../lib/version-diff-engine";
+import { withRegistrationSurvey } from "../lib/registration-survey";
+import { isRegistrationSurvey } from "../lib/system-fields";
 
 // In-memory state storage simulating persistent backend database
 // No seeded surveys: everything is created in the builder.
@@ -32,7 +34,19 @@ const persist = () => {
         /* storage full or blocked: keep working in memory */
     }
 };
-let inMemorySurveys: SurveyModel[] = loadStored();
+// The built-in Farmer Registration survey is always there (seeded on first load, lib/registration-survey.ts).
+let inMemorySurveys: SurveyModel[] = (() => {
+    const stored = loadStored();
+    const seeded = withRegistrationSurvey(stored, new Date().toISOString());
+    if (seeded !== stored && typeof window !== "undefined") {
+        try {
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
+        } catch {
+            /* storage full or blocked: keep working in memory */
+        }
+    }
+    return seeded;
+})();
 
 // Update AZ survey counts dynamically
 MOCK_AZS.forEach((az) => {
@@ -337,6 +351,9 @@ export const SurveyService = {
         const original = inMemorySurveys.find((s) => s.id === surveyId);
         if (!original) {
             throw new Error(`Survey "${surveyId}" not found.`);
+        }
+        if (isRegistrationSurvey(original)) {
+            throw new Error("The built-in Farmer Registration survey can't be duplicated.");
         }
 
         const newId = `srv_${Date.now()}`;

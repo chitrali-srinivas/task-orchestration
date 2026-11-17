@@ -1,6 +1,6 @@
 // PORT-BOUND — one row of the Farmers table: a farmer registered on the phone, joined with their tasks and open job.
 // Flat fields (name, village, locationSource, …) are what the table sorts, searches and filters on.
-import type { Farmer, LatLng } from "@/lib/orchestration/engine";
+import type { Farmer, FarmerStatus, LatLng } from "@/lib/orchestration/engine";
 import type { TaskRecord } from "@/app/layouts/tasks/data/schema";
 
 /** Where planning finds the farmer: the registration GPS point, the plot boundary's centre, the village centre, or nowhere. */
@@ -10,6 +10,9 @@ export interface FarmerRecord {
     id: string;
     name: string;
     village: string;
+    /** Registered → NOC received → Verified, or Blacklisted (engine.ts). */
+    status: FarmerStatus;
+    statusLabel: string;
     locationSource: FarmerLocationSource;
     /** "GPS point", "Plot centre", "Village centre", "No location". */
     locationLabel: string;
@@ -38,8 +41,8 @@ export interface DateRange {
 }
 
 export interface FarmerFilters {
-    /** The location tab; undefined = All. */
-    tabLocation?: FarmerLocationSource;
+    /** The status tab; undefined = All. */
+    tabStatus?: FarmerStatus;
     village?: string[];
     locationSource?: FarmerLocationSource[];
     registeredOn?: DateRange;

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { DataTableColumnHeader } from "@/app/layouts/tasks/components/data-table-column-header"
 import { formatYmd, initials } from "@/app/layouts/tasks/components/columns"
+import type { FarmerStatus } from "@/lib/orchestration/engine"
 import { FarmerLocationSource, FarmerRecord } from "../data/schema"
 
 const muted = <span className="text-muted-foreground">-</span>
@@ -21,6 +22,22 @@ const LOCATION_STYLE: Record<FarmerLocationSource, string> = {
 export function LocationBadge({ source, label, className }: { source: FarmerLocationSource; label: string; className?: string }) {
     return (
         <Badge variant="outline" className={cn("font-semibold px-2.5 py-0.5 rounded-full border shadow-none", LOCATION_STYLE[source], className)}>
+            {label}
+        </Badge>
+    )
+}
+
+// Farmer status: grey while onboarding, green once verified, red when blacklisted.
+const STATUS_STYLE: Record<FarmerStatus, string> = {
+    registered: "bg-zinc-50 text-zinc-700 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-700",
+    noc_received: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900/50",
+    verified: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/50",
+    blacklisted: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50",
+}
+
+export function FarmerStatusBadge({ status, label, className }: { status: FarmerStatus; label: string; className?: string }) {
+    return (
+        <Badge variant="outline" className={cn("font-semibold px-2.5 py-0.5 rounded-full border shadow-none", STATUS_STYLE[status], className)}>
             {label}
         </Badge>
     )
@@ -43,6 +60,13 @@ export const farmerColumns: ColumnDef<FarmerRecord>[] = [
                 <span className="text-sm">{row.original.name}</span>
             </div>
         ),
+    },
+    {
+        accessorKey: "status",
+        size: 140,
+        meta: { title: "Status" },
+        header: ({ column, table }) => <DataTableColumnHeader column={column} table={table} title="Status" />,
+        cell: ({ row }) => <FarmerStatusBadge status={row.original.status} label={row.original.statusLabel} />,
     },
     {
         accessorKey: "village",

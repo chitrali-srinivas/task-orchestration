@@ -144,7 +144,7 @@ export default function TasksPage() {
                 label: "Created from",
                 kind: "multi",
                 options: [
-                    { value: "registration", label: "Registration" },
+                    { value: "registration", label: "Workflow start" },
                     { value: "follow-up", label: "Follow-up task" },
                 ],
             },

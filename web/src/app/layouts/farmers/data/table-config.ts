@@ -37,8 +37,9 @@ export function createFarmersTableConfig(dataset: FarmerRecord[]): TableConfig<F
         // Newest registrations first.
         defaultSort: { field: "registeredAt", direction: "desc" },
         customFilterHandlers: {
-            tabLocation: (row, value) => row.locationSource === value,
+            tabStatus: (row, value) => row.status === value,
             name: (row, value) => typeof value !== "string" || includes(row.name, value),
+            status: (row, value) => typeof value !== "string" || includes(row.statusLabel, value),
             village: textOrOptions((row) => row.village, (row) => row.village),
             locationSource: textOrOptions((row) => row.locationLabel, (row) => row.locationSource),
             registeredOn: dateField((row) => row.registeredOn),
@@ -47,7 +48,7 @@ export function createFarmersTableConfig(dataset: FarmerRecord[]): TableConfig<F
         },
         calculateSummaryCounts: (rows) => {
             const counts: Record<string, number> = { all: rows.length };
-            rows.forEach((row) => (counts[row.locationSource] = (counts[row.locationSource] ?? 0) + 1));
+            rows.forEach((row) => (counts[row.status] = (counts[row.status] ?? 0) + 1));
             return counts;
         },
     };
