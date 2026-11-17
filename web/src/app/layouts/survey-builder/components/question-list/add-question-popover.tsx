@@ -39,6 +39,7 @@ import {
     QUESTION_CATEGORIES,
     QUESTION_TYPE_REGISTRY,
 } from "../../registry/question-type-registry";
+import { isProductionType } from "../../lib/production-contract";
 import { QuestionTypeHelpPopover } from "../common/question-type-help-popover";
 
 interface AddQuestionPopoverProps {
@@ -71,7 +72,8 @@ export function AddQuestionPopover({ onAddQuestion, trigger }: AddQuestionPopove
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState<QuestionCategory | "all">("all");
 
-    const allTypes = Object.values(QUESTION_TYPE_REGISTRY);
+    // Only the types the field app renders (lib/production-contract.ts).
+    const allTypes = Object.values(QUESTION_TYPE_REGISTRY).filter((t) => isProductionType(t.id));
 
     const filteredTypes = allTypes.filter((t) => {
         const matchesCat = selectedCategory === "all" || t.category === selectedCategory;

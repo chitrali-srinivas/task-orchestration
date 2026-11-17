@@ -1,11 +1,11 @@
 /**
  * System fields: questions planning can't work without, defined here in code (like the masters).
  *
- * The built-in Farmer Registration survey (lib/registration-survey.ts: the one survey that registers farmers, outside
- * any workflow) holds a farmer name, a village and a plot boundary. Each carries a fixed `systemKey`, so the planner
- * reads it by key instead of guessing from titles. In the builder they can't be deleted, duplicated, retyped, made
- * optional, hidden by logic or put in a repeater, not even by a Super Admin; wording, hint, translations, position
- * and limits (points, area) stay editable.
+ * The built-in Farmer Registration survey (production's Farmer_Registration, seeded from data/questionnaire.prod.json
+ * by lib/production-seed.ts) holds the farmer name, the village and the plot location, on production's columns.
+ * Each carries a fixed `systemKey`, so the planner reads it by key instead of guessing from titles. In the builder
+ * they can't be deleted, duplicated, retyped, made optional, hidden by logic or put in a repeater, not even by a
+ * Super Admin; wording, hint, translations and position stay editable. Only types the field app renders are used.
  *
  * Pure: no React, no storage. Run the tests with: node --test src/app/layouts/survey-builder/lib/system-fields.test.ts
  */
@@ -16,8 +16,8 @@ export type SystemFieldKey = "farmer.name" | "farmer.village" | "farmer.plot";
 /** The category (lib/category-registry.ts, id `farmer_enrollment`) of the built-in registration survey. */
 export const FARMER_ENROLLMENT = "Farmer Enrollment";
 
-/** Id of the built-in Farmer Registration survey: always present, edited only by a Super Admin. */
-export const REGISTRATION_SURVEY_ID = "srv_farmer_registration";
+/** Id of the built-in Farmer Registration survey (production's Farmer_Registration): edited only by a Super Admin. */
+export const REGISTRATION_SURVEY_ID = "3756719938187133848";
 export const isRegistrationSurvey = (survey: { id?: string; systemSurvey?: string } | undefined) =>
     survey?.id === REGISTRATION_SURVEY_ID || survey?.systemSurvey === "farmer_registration";
 
@@ -38,28 +38,26 @@ export const SYSTEM_FIELDS: SystemFieldDefinition[] = [
         purpose: "How the farmer is shown on tasks, jobs and the phone.",
         type: "Subjective",
         columnName: "farmer_name",
-        titles: { en: "Farmer name", hi: "किसान का नाम" },
+        titles: { en: "Farmer Name?", hi: "किसान का नाम?" },
     },
     {
         key: "farmer.village",
         label: "Village",
-        purpose: "Groups farmers by village, and planning falls back to the village centre.",
-        type: "Selected Dropdown",
-        columnName: "farmer_village",
-        titles: { en: "Village", hi: "गाँव" },
+        purpose: "Groups farmers by village, and planning falls back to the village centre (matched by name).",
+        type: "Subjective",
+        columnName: "village_name",
+        titles: { en: "Village Name?", hi: "गांव का नाम?" },
     },
     {
         key: "farmer.plot",
-        label: "Plot boundary",
-        purpose: "Planning sends the surveyor to the centre of this plot.",
-        type: "PolygonBoundary",
-        columnName: "plot_boundary",
-        titles: { en: "Plot boundary", hi: "खेत की सीमा" },
+        label: "Plot location",
+        purpose: "Planning sends the surveyor to this GPS point.",
+        type: "Map",
+        columnName: "plot_location",
+        titles: { en: "Plot location", hi: "खेत का स्थान" },
     },
 ];
 
-const VILLAGES = { masterSetId: "villages", displayField: "villageName" };
-const MIN_PLOT_POINTS = 3;
 const NO_LOGIC: QuestionModel["visibility"] = { enabled: false, ruleGroup: { conjunction: "AND", conditions: [] } };
 /** Legacy fields that make a question a follow-up or a repeater child. */
 const NESTING_FIELDS = ["Parent_Dep", "Opt_Dep", "Parent_Repeat", "Qn_In"];
@@ -89,14 +87,6 @@ export function lockQuestion(q: QuestionModel, def: SystemFieldDefinition): Ques
     delete out.parentQuestionId;
     delete out.followUpDepth;
     delete out.repeater;
-    if (def.key === "farmer.village") {
-        out.optionSource = "master";
-        out.masterDataConfig = { ...q.masterDataConfig, ...VILLAGES, allowMultiSelect: false };
-        out.options = [];
-    }
-    if (def.key === "farmer.plot") {
-        out.validation.minVertices = Math.max(MIN_PLOT_POINTS, q.validation?.minVertices ?? MIN_PLOT_POINTS);
-    }
     return out;
 }
 
@@ -125,12 +115,8 @@ const isTopLevel = (q: QuestionModel, questions: QuestionModel[]) =>
 /** An untagged question that already asks for this field (so an older survey keeps its question and answers). */
 function existingFor(def: SystemFieldDefinition, questions: QuestionModel[]): QuestionModel | undefined {
     const candidates = questions.filter((q) => !q.systemKey && isTopLevel(q, questions));
-    if (def.key === "farmer.plot") return candidates.find((q) => q.type === "PolygonBoundary");
-    if (def.key === "farmer.village") {
-        return candidates.find(
-            (q) => (q.type === "Selected Dropdown" || q.type === "Dropdown") && q.optionSource === "master" && q.masterDataConfig?.masterSetId === "villages"
-        );
-    }
+    if (def.key === "farmer.plot") return candidates.find((q) => q.type === "Map" && ["plot_location", "location_plot"].includes(q.columnName));
+    if (def.key === "farmer.village") return candidates.find((q) => q.type === "Subjective" && q.columnName === "village_name");
     return candidates.find((q) => q.type === "Subjective" && asksFarmerName(q));
 }
 
@@ -146,7 +132,7 @@ function newQuestion(def: SystemFieldDefinition, questions: QuestionModel[]): Qu
             type: def.type,
             columnName: def.columnName,
             titles: { ...def.titles },
-            validation: def.key === "farmer.plot" ? { required: true, minVertices: MIN_PLOT_POINTS, maxVertices: 50 } : { required: true },
+            validation: { required: true },
             visibility: NO_LOGIC,
         },
         def
@@ -155,8 +141,9 @@ function newQuestion(def: SystemFieldDefinition, questions: QuestionModel[]): Qu
 
 /**
  * Bring a survey's system fields in line: the registration survey gets them (questions that already ask for them are
- * tagged, missing ones added at the top in SYSTEM_FIELDS order) and they're locked. Any other survey loses the tags,
- * so those questions become ordinary ones. Returns the same survey when nothing changed; renumbering is the caller's.
+ * tagged; missing ones go right after the last system field there is, or at the top, in SYSTEM_FIELDS order) and
+ * they're locked. Any other survey loses the tags, so those questions become ordinary ones. Returns the same survey
+ * when nothing changed; renumbering is the caller's.
  */
 export function syncSystemFields<S extends Pick<SurveyModel, "id" | "systemSurvey" | "questions">>(survey: S): S {
     let questions = survey.questions;
@@ -194,7 +181,11 @@ export function syncSystemFields<S extends Pick<SurveyModel, "id" | "systemSurve
             added.push(newQuestion(def, [...questions, ...added]));
         }
     });
-    const next = lockSystemFields([...added, ...questions]);
+    let at = 0;
+    questions.forEach((q, i) => {
+        if (q.systemKey) at = i + 1;
+    });
+    const next = lockSystemFields([...questions.slice(0, at), ...added, ...questions.slice(at)]);
     return JSON.stringify(next) === JSON.stringify(survey.questions) ? survey : { ...survey, questions: next };
 }
 
@@ -222,11 +213,6 @@ export function systemFieldIssues(survey: Pick<SurveyModel, "id" | "systemSurvey
         if (!q.validation?.required) problems.push("it isn't required");
         if (q.visibility?.enabled) problems.push("it has show-if logic");
         if (!isTopLevel(q, survey.questions)) problems.push("it is inside a repeater or under another question");
-        const mdc = q.masterDataConfig;
-        if (def.key === "farmer.village" && (q.optionSource !== "master" || mdc?.masterSetId !== VILLAGES.masterSetId || mdc?.allowMultiSelect)) {
-            problems.push("it doesn't offer one village from Masters - Village");
-        }
-        if (def.key === "farmer.plot" && (q.validation?.minVertices ?? 0) < MIN_PLOT_POINTS) problems.push(`it allows fewer than ${MIN_PLOT_POINTS} points`);
         if (problems.length > 0) issues.push({ key: def.key, questionId: q.id, message: `${def.label}: ${problems.join(", ")}.` });
     });
     return issues;

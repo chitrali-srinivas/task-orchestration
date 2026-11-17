@@ -46,7 +46,8 @@ import {
 } from "@/components/ui/tooltip";
 import { LocaleDefinition, SurveyModel } from "../../types/survey-schema";
 import { SurveyValidationResult } from "../../lib/survey-validator";
-import { serializeSurveyToBackend, serializeCoreSurveyJSON } from "../../lib/survey-serializer";
+import { serializeCoreSurveyJSON } from "../../lib/survey-serializer";
+import { encodeSurvey } from "../../lib/production-contract";
 import { TranslationService } from "../../services/translation-service";
 import { getCategoryById } from "../../lib/category-registry";
 import { ValidationSheet } from "./validation-sheet";
@@ -117,13 +118,15 @@ export function SurveyHeader({
     const localesCount = survey.locales?.length || 1;
     const categoryDef = getCategoryById(survey.category);
 
-    const handleExportLegacyJSON = () => {
-        const legacyJSON = serializeSurveyToBackend(survey);
-        const blob = new Blob([JSON.stringify(legacyJSON, null, 2)], { type: "application/json" });
+    // The survey as the field app's questionnaire stores it (lib/production-contract.ts): a task survey object, or the
+    // questionnaire row for a row survey, with production ids, tables and all 28 fields per question.
+    const handleExportProductionJSON = () => {
+        const productionJSON = encodeSurvey(survey);
+        const blob = new Blob([JSON.stringify(productionJSON, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `${survey.name.toLowerCase().replace(/\s+/g, "_")}_legacy_${survey.versionTag}.json`;
+        a.download = `${survey.name.trim().toLowerCase().replace(/\s+/g, "_")}_production_${survey.versionTag}.json`;
         a.click();
         URL.revokeObjectURL(url);
     };
@@ -483,6 +486,10 @@ export function SurveyHeader({
                             <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold px-2 py-1">
                                 Export & Download Schema
                             </DropdownMenuLabel>
+                            <DropdownMenuItem onClick={handleExportProductionJSON} className="gap-2 text-xs cursor-pointer">
+                                <Download className="h-4 w-4 text-zinc-500" />
+                                <span>Export Production JSON (field app)</span>
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={handleExportNormalizedJSON} className="gap-2 text-xs cursor-pointer">
                                 <Download className="h-4 w-4 text-zinc-500" />
                                 <span>Export Core Schema (v2.0 JSON)</span>
@@ -494,10 +501,6 @@ export function SurveyHeader({
                             <DropdownMenuItem onClick={handleExportPackageJSON} className="gap-2 text-xs cursor-pointer">
                                 <FileJson className="h-4 w-4 text-zinc-500" />
                                 <span>Export Complete Package (Core + All Trans)</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={handleExportLegacyJSON} className="gap-2 text-xs cursor-pointer">
-                                <FileJson className="h-4 w-4 text-zinc-500" />
-                                <span>Export Legacy Backend JSON (v1.0)</span>
                             </DropdownMenuItem>
                             <DropdownMenuSeparator className="bg-zinc-100 dark:bg-zinc-800" />
                             <DropdownMenuItem onClick={onOpenVersionHistory} className="gap-2 text-xs cursor-pointer">

@@ -116,3 +116,12 @@ test("system fields win over guesses: tagged name, village and plot", () => {
     assert.equal(f.location?.source, "plot");
     assert.ok(Math.abs(f.location!.lat - 21.1) < 1e-9 && Math.abs(f.location!.lng - 77.1) < 1e-9);
 });
+
+test("the system plot field as a GPS point (production's plot_location Map) is the farmer's location", () => {
+    const qs = [
+        { id: "spot", type: "Map", columnName: "sample_location" },
+        { id: "p", systemKey: "farmer.plot" as const, type: "Map", columnName: "plot_location" },
+    ];
+    const f = farmerFromResponse(qs, { spot: { lat: 10, lng: 70 }, p: { lat: 21.2, lng: 77.5, accuracy: 4 } }, "");
+    assert.deepEqual(f.location, { lat: 21.2, lng: 77.5, source: "gps" });
+});

@@ -440,8 +440,10 @@ export default function SurveyBuilderPage() {
         if (systemFieldOf(targetQ)) return; // system fields can't be duplicated
 
         const newId = `q_${Date.now()}`;
+        const copySource = { ...targetQ };
+        delete copySource.production; // a copy has no production links of its own
         const duplicated: QuestionModel = {
-            ...JSON.parse(JSON.stringify(targetQ)),
+            ...JSON.parse(JSON.stringify(copySource)),
             id: newId,
             columnName: `${targetQ.columnName}_copy`,
             titles: {

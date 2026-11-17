@@ -332,11 +332,14 @@ const isLatLng = (v: unknown): v is LatLng =>
     Boolean(v) && typeof (v as LatLng).lat === "number" && typeof (v as LatLng).lng === "number";
 
 /**
- * Centre of the plot boundary (the system plot field first, then any other PolygonBoundary), since that's where the
- * visit happens; else the first GPS point (Map answer) from older surveys that have no plot.
+ * The system plot field first (production's plot_location: a GPS point; a drawn boundary gives its centre), then any
+ * plot boundary, then the first GPS point (Map answer).
  */
 function locationFromResponse(questions: QuestionRef[], response: Record<string, unknown>): Located | undefined {
-    const plots = [...questions.filter((q) => q.systemKey === "farmer.plot"), ...questions.filter((q) => q.type === "PolygonBoundary" && q.systemKey !== "farmer.plot")];
+    const tagged = questions.find((q) => q.systemKey === "farmer.plot");
+    const taggedPoint = tagged ? response[tagged.id] : undefined;
+    if (isLatLng(taggedPoint)) return { lat: taggedPoint.lat, lng: taggedPoint.lng, source: "gps" };
+    const plots = [...(tagged ? [tagged] : []), ...questions.filter((q) => q.type === "PolygonBoundary" && q.systemKey !== "farmer.plot")];
     for (const q of plots) {
         const vertices = ((response[q.id] as { vertices?: unknown[] } | undefined)?.vertices ?? []).filter(isLatLng);
         if (vertices.length === 0) continue;

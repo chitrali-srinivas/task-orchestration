@@ -437,6 +437,95 @@ export const QUESTION_TYPE_REGISTRY: Record<BackendQuestionType, QuestionTypeDes
     },
 
     // 4. Date & Time
+    MobileNumMAX10: {
+        id: "MobileNumMAX10",
+        displayName: "Mobile Number (10 digits)",
+        category: "numeric",
+        description: "A 10-digit mobile number, digits only.",
+        iconName: "Hash",
+        defaultConfig: {
+            titles: { en: "Mobile number", hi: "मोबाइल नंबर" },
+            validation: { required: true },
+        },
+        supports: {
+            required: true,
+            options: false,
+            validation: true,
+            conditionalLogic: true,
+            repeater: false,
+            translations: true,
+            dataColumnName: true,
+            anomaly: false,
+            ageDependency: false,
+        },
+    },
+    NaturalNumMax200: {
+        id: "NaturalNumMax200",
+        displayName: "Natural Number (1 to 200)",
+        category: "numeric",
+        description: "Positive natural number (1, 2, 3... 200).",
+        iconName: "Hash",
+        defaultConfig: {
+            titles: { en: "Enter natural count (1-200)", hi: "प्राकृतिक संख्या दर्ज करें (1-200)" },
+            validation: { required: true, minValue: 1, maxValue: 200, decimalPlaces: 0 },
+        },
+        supports: {
+            required: true,
+            options: false,
+            validation: true,
+            conditionalLogic: true,
+            repeater: false,
+            translations: true,
+            dataColumnName: true,
+            anomaly: true,
+            ageDependency: false,
+        },
+    },
+    DecimalMax1000000: {
+        id: "DecimalMax1000000",
+        displayName: "Decimal Number (Max 1,000,000)",
+        category: "numeric",
+        description: "Precision decimal value bounded up to 1,000,000.",
+        iconName: "Binary",
+        defaultConfig: {
+            titles: { en: "Enter decimal (Max 1,000,000)", hi: "दशमलव दर्ज करें (अधिकतम 1,000,000)" },
+            validation: { required: true, minValue: 0, maxValue: 1000000, decimalPlaces: 2 },
+        },
+        supports: {
+            required: true,
+            options: false,
+            validation: true,
+            conditionalLogic: true,
+            repeater: false,
+            translations: true,
+            dataColumnName: true,
+            anomaly: true,
+            ageDependency: false,
+        },
+    },
+    DecimalMax10000000: {
+        id: "DecimalMax10000000",
+        displayName: "Decimal Number (Max 10,000,000)",
+        category: "numeric",
+        description: "Precision decimal value bounded up to 10,000,000 (e.g. odometer readings).",
+        iconName: "Binary",
+        defaultConfig: {
+            titles: { en: "Enter decimal (Max 10,000,000)", hi: "दशमलव दर्ज करें (अधिकतम 1,00,00,000)" },
+            validation: { required: true, minValue: 0, maxValue: 10000000, decimalPlaces: 2 },
+        },
+        supports: {
+            required: true,
+            options: false,
+            validation: true,
+            conditionalLogic: true,
+            repeater: false,
+            translations: true,
+            dataColumnName: true,
+            anomaly: true,
+            ageDependency: false,
+        },
+    },
+
     Date: {
         id: "Date",
         displayName: "Date Input",
@@ -505,6 +594,28 @@ export const QUESTION_TYPE_REGISTRY: Record<BackendQuestionType, QuestionTypeDes
     },
 
     // 5. Media
+    Time: {
+        id: "Time",
+        displayName: "Time",
+        category: "datetime",
+        description: "A time of day (hours and minutes).",
+        iconName: "Calendar",
+        defaultConfig: {
+            titles: { en: "Select time", hi: "समय चुनें" },
+            validation: { required: true },
+        },
+        supports: {
+            required: true,
+            options: false,
+            validation: false,
+            conditionalLogic: true,
+            repeater: false,
+            translations: true,
+            dataColumnName: true,
+            anomaly: false,
+            ageDependency: false,
+        },
+    },
     "Picture Input": {
         id: "Picture Input",
         displayName: "Photo Capture / Upload",
@@ -668,33 +779,8 @@ export const QUESTION_TYPE_REGISTRY: Record<BackendQuestionType, QuestionTypeDes
 };
 
 /**
- * Clean, consolidated 16 user-facing question types.
- * Replaces duplicate numeric variants with one configurable 'Number' type
- * and replaces 'CalendarWithDate' with 'DateRange'.
+ * The types the builder offers when adding a question: the 27 the field app renders (lib/production-contract.ts).
+ * Dropdown, Number, Date, DateRange and PolygonBoundary stay in the registry so older surveys still open, but aren't
+ * offered.
  */
-export const SIMPLIFIED_QUESTION_TYPES: BackendQuestionType[] = [
-    // Choice & Selection
-    "Radio",
-    "Checkbox",
-    "Dropdown",
-    "Selected Dropdown",
-    // Text Input
-    "Subjective",
-    "TextArea",
-    // Numeric & Precision
-    "Number",
-    // Date & Time
-    "Date",
-    "DateRange",
-    // Media Capture
-    "Picture Input",
-    "Video",
-    // Location & Boundary
-    "Map",
-    "PolygonBoundary",
-    // Operational Utilities
-    "QRCode",
-    "Rating",
-    // Advanced / Dynamic Containers
-    "Repeater_QT",
-];
+export { PRODUCTION_TYPES as CREATABLE_QUESTION_TYPES } from "../lib/production-contract";

@@ -10,7 +10,7 @@ import {
     MOCK_AZS,
 } from "./mock-surveys";
 import { computeSurveyDiff, SurveyVersionDiff } from "../lib/version-diff-engine";
-import { withRegistrationSurvey } from "../lib/registration-survey";
+import { withProductionSurveys } from "../lib/production-seed";
 import { isRegistrationSurvey } from "../lib/system-fields";
 
 // In-memory state storage simulating persistent backend database
@@ -34,19 +34,7 @@ const persist = () => {
         /* storage full or blocked: keep working in memory */
     }
 };
-// The built-in Farmer Registration survey is always there (seeded on first load, lib/registration-survey.ts).
-let inMemorySurveys: SurveyModel[] = (() => {
-    const stored = loadStored();
-    const seeded = withRegistrationSurvey(stored, new Date().toISOString());
-    if (seeded !== stored && typeof window !== "undefined") {
-        try {
-            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
-        } catch {
-            /* storage full or blocked: keep working in memory */
-        }
-    }
-    return seeded;
-})();
+let inMemorySurveys: SurveyModel[] = loadStored();
 
 // Update AZ survey counts dynamically
 MOCK_AZS.forEach((az) => {
@@ -72,6 +60,41 @@ inMemorySurveys.forEach((s) => {
     ]);
 });
 
+const snapshotOf = (s: SurveyModel, changeSummary: string): SurveyVersionSnapshot => ({
+    version: s.version,
+    versionTag: s.versionTag,
+    status: s.status,
+    createdAt: s.createdAt,
+    createdBy: s.createdBy,
+    publishedAt: s.status === "Published" ? s.updatedAt : undefined,
+    changeSummary,
+    surveySnapshot: JSON.parse(JSON.stringify(s)),
+});
+
+/**
+ * The production surveys (data/questionnaire.prod.json, 77 surveys under their production ids, the registration one
+ * built in) are added to the store once, on first use (lib/production-seed.ts). The file is loaded on demand, so it
+ * isn't in every page's bundle.
+ */
+let seeding: Promise<void> | null = null;
+function ensureProductionSurveys(): Promise<void> {
+    if (typeof window === "undefined") return Promise.resolve();
+    seeding ??= import("../data/questionnaire.prod.json")
+        .then((m) => {
+            const rows = (m.default ?? m) as unknown as unknown[][];
+            const next = withProductionSurveys(inMemorySurveys, rows, new Date().toISOString());
+            if (next === inMemorySurveys) return;
+            const before = new Set(inMemorySurveys.map((s) => s.id));
+            inMemorySurveys = next;
+            persist();
+            next.filter((s) => !before.has(s.id)).forEach((s) => inMemoryVersionSnapshots.set(s.id, [snapshotOf(s, `Production ${s.versionTag}, ${s.questions.length} questions.`)]));
+        })
+        .catch(() => {
+            seeding = null; // try again next time
+        });
+    return seeding;
+}
+
 // Audit log entries store: surveyId -> logs[]
 const inMemoryAuditLogs = new Map<string, AuditLogEntry[]>();
 
@@ -91,11 +114,13 @@ export const SurveyService = {
      * Retrieves all surveys filtered by AZ
      */
     async getAllSurveys(): Promise<SurveyModel[]> {
+        await ensureProductionSurveys();
         await new Promise((r) => setTimeout(r, 80));
         return [...inMemorySurveys];
     },
 
     async getSurveysByAZ(azId: string): Promise<SurveyModel[]> {
+        await ensureProductionSurveys();
         await new Promise((r) => setTimeout(r, 80));
         return inMemorySurveys.filter((s) => s.azId === azId);
     },
@@ -104,6 +129,7 @@ export const SurveyService = {
      * Retrieves a single survey by ID
      */
     async getSurveyById(surveyId: string): Promise<SurveyModel | null> {
+        await ensureProductionSurveys();
         await new Promise((r) => setTimeout(r, 80));
         const found = inMemorySurveys.find((s) => s.id === surveyId);
         return found ? JSON.parse(JSON.stringify(found)) : null;
@@ -357,8 +383,11 @@ export const SurveyService = {
         }
 
         const newId = `srv_${Date.now()}`;
+        const copy = JSON.parse(JSON.stringify(original)) as SurveyModel;
+        // A copy is a new survey: it doesn't take the original's production id, row or table.
+        if (copy.metadata) delete copy.metadata.production;
         const newSurvey: SurveyModel = {
-            ...JSON.parse(JSON.stringify(original)),
+            ...copy,
             id: newId,
             name: `${original.name} (Copy)`,
             version: 1,

@@ -30,27 +30,27 @@ test("the registration survey gets name, village and plot at the top, locked", (
     const out = syncSystemFields(enrollment([q("crop", "Radio")]));
     assert.deepEqual(keys(out.questions), ["farmer.name", "farmer.village", "farmer.plot", "-"]);
     const [name, village, plot] = out.questions;
-    assert.equal(name.type, "Subjective");
-    assert.equal(village.optionSource, "master");
-    assert.equal(village.masterDataConfig?.masterSetId, "villages");
-    assert.equal(plot.type, "PolygonBoundary");
-    assert.equal(plot.validation.minVertices, 3);
+    assert.deepEqual([name.type, name.columnName], ["Subjective", "farmer_name"]);
+    assert.deepEqual([village.type, village.columnName], ["Subjective", "village_name"]);
+    assert.deepEqual([plot.type, plot.columnName], ["Map", "plot_location"]);
     assert.ok(out.questions.slice(0, 3).every((x) => x.validation.required && !x.visibility.enabled));
     assert.deepEqual(systemFieldIssues(out), []);
     // Idempotent: the same object back when nothing needs doing.
     assert.equal(syncSystemFields(out), out);
 });
 
-test("questions that already ask for a field are tagged in place, keeping their ids and wording", () => {
-    const plot = q("q7", "PolygonBoundary", { titles: { en: "Walk the field" } });
-    const village = q("q2", "Selected Dropdown", { optionSource: "master", masterDataConfig: { masterSetId: "villages" } });
+test("questions that already ask for a field are tagged in place; a missing one goes after the last system field", () => {
+    const name = q("q1", "Subjective", { columnName: "farmer_name", titles: { en: "Farmer Name?" } });
     const father = q("q3", "Subjective", { titles: { en: "Father's name" } });
-    const name = q("q1", "Subjective", { titles: { en: "Farmer's name" } });
-    const out = syncSystemFields(enrollment([name, village, father, plot]));
-    assert.deepEqual(keys(out.questions), ["farmer.name", "farmer.village", "-", "farmer.plot"]);
-    assert.deepEqual(out.questions.map((x) => x.id), ["q1", "q2", "q3", "q7"]);
-    assert.equal(out.questions[3].titles.en, "Walk the field");
-    assert.equal(out.questions[3].columnName, "plot_boundary");
+    const village = q("q9", "Subjective", { columnName: "village_name", titles: { en: "Village Name?" } });
+    const land = q("q10", "DecimalMax1000");
+    const out = syncSystemFields(enrollment([name, father, village, land]));
+    assert.deepEqual(keys(out.questions), ["farmer.name", "-", "farmer.village", "farmer.plot", "-"]);
+    assert.deepEqual(out.questions.map((x) => x.id), ["q1", "q3", "q9", "q_farmer_plot", "q10"]);
+    assert.equal(out.questions[0].titles.en, "Farmer Name?");
+    // A plot already asked as a Map question is adopted.
+    const spot = q("q4", "Map", { columnName: "plot_location", titles: { en: "Where is the plot?" } });
+    assert.deepEqual(keys(syncSystemFields(enrollment([name, village, spot])).questions), ["farmer.name", "farmer.village", "farmer.plot"]);
 });
 
 test("other surveys lose the tags (even Farmer Enrollment ones); a second copy of a key becomes ordinary", () => {
@@ -62,15 +62,14 @@ test("other surveys lose the tags (even Farmer Enrollment ones); a second copy o
 
 test("locking undoes edits a system field can't take and pulls it out of a repeater", () => {
     const [, , plot] = syncSystemFields(enrollment([])).questions;
-    const edited = { ...plot, type: "Map" as const, columnName: "gps", validation: { required: false, minVertices: 1 }, visibility: { enabled: true, ruleGroup: { conjunction: "AND" as const, conditions: [] } }, titles: { en: "Draw the plot" } };
+    const edited = { ...plot, type: "Subjective" as const, columnName: "gps", validation: { required: false }, visibility: { enabled: true, ruleGroup: { conjunction: "AND" as const, conditions: [] } }, titles: { en: "Mark the plot" } };
     const repeater = q("rep", "Repeater_QT", { repeater: { isRepeater: true, countSourceType: "fixed", fixedCount: 2, childQuestionIds: [plot.id, "other"] } });
     const [locked, rep] = lockSystemFields([edited, repeater]);
-    assert.equal(locked.type, "PolygonBoundary");
-    assert.equal(locked.columnName, "plot_boundary");
+    assert.equal(locked.type, "Map");
+    assert.equal(locked.columnName, "plot_location");
     assert.equal(locked.validation.required, true);
-    assert.equal(locked.validation.minVertices, 3);
     assert.equal(locked.visibility.enabled, false);
-    assert.equal(locked.titles.en, "Draw the plot");
+    assert.equal(locked.titles.en, "Mark the plot");
     assert.deepEqual(rep.repeater?.childQuestionIds, ["other"]);
 });
 

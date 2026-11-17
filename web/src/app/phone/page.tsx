@@ -13,7 +13,7 @@ import { SurveyModel } from "@/app/layouts/survey-builder/types/survey-schema";
 import { PreviewAllQuestions } from "@/app/layouts/survey-builder/components/preview/preview-runtime";
 import { isQuestionVisible } from "@/app/layouts/survey-builder/lib/logic-evaluator";
 import { Workflow } from "@/app/layouts/survey-workflow/workflow-store";
-import { REGISTRATION_SURVEY_ID } from "@/app/layouts/survey-builder/lib/system-fields";
+import { isRegistrationSurvey } from "@/app/layouts/survey-builder/lib/system-fields";
 import { DEFAULT_START_STATUS, FARMER_STATUS, FARMER_STATUS_LABEL, Farmer, LatLng, LocationSource, STATUS, Subject, Task, farmerIdOf, farmerStatusOf, isPendingOnApp } from "@/lib/orchestration/engine";
 import { JOB_STATUS, Job, JobStatus, Surveyor, Village, distanceKm, openJobsByTask, stopKey, subjectLocation, unfinishedStops } from "@/lib/orchestration/jobs";
 import {
@@ -265,7 +265,7 @@ function PhoneApp({ today, surveys, tasks, farmers, surveyor, jobs, villageMaste
     );
 
     // The built-in registration survey is always open: it is how every farmer starts.
-    const registration = surveyById.get(REGISTRATION_SURVEY_ID);
+    const registration = surveys.find((s) => isRegistrationSurvey(s));
     const startCard = registration && (
         <button
             type="button"

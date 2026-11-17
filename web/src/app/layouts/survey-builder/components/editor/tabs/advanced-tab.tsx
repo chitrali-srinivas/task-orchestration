@@ -8,13 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { LocaleDefinition, QuestionModel, SurveyModel } from "../../../types/survey-schema";
 import { serializeQuestionToCoreJSON } from "../../../lib/survey-serializer";
+import { encodeQuestions } from "../../../lib/production-contract";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronDown, Globe } from "lucide-react";
+import { ChevronDown, Globe, Smartphone } from "lucide-react";
 
 interface AdvancedTabProps {
     question: QuestionModel;
@@ -31,7 +32,13 @@ export function AdvancedTab({
     onChangeQuestion,
     isPublished = false,
 }: AdvancedTabProps) {
-    const [inspectorView, setInspectorView] = useState<"core" | "translation">("core");
+    // "production": the question exactly as the field app's questionnaire stores it (lib/production-contract.ts).
+    const [inspectorView, setInspectorView] = useState<"production" | "core" | "translation">("production");
+    const productionQuestion = React.useMemo(() => {
+        const all = survey?.questions?.length ? survey.questions : allQuestions;
+        const i = all.findIndex((q) => q.id === question.id);
+        return i >= 0 ? encodeQuestions(all)[i] : encodeQuestions([question])[0];
+    }, [survey?.questions, allQuestions, question]);
     const [copied, setCopied] = useState(false);
 
     const defaultLocale = survey?.defaultLocale || "en";
@@ -98,7 +105,9 @@ export function AdvancedTab({
     }
 
     const activeJSONString =
-        inspectorView === "core"
+        inspectorView === "production"
+            ? JSON.stringify(productionQuestion, null, 2)
+            : inspectorView === "core"
             ? JSON.stringify(serializeQuestionToCoreJSON(question, defaultLocale), null, 2)
             : JSON.stringify(translationExcerpt, null, 2);
 
@@ -110,7 +119,9 @@ export function AdvancedTab({
 
     const handleDownload = () => {
         const filename =
-            inspectorView === "core"
+            inspectorView === "production"
+                ? `question_${productionQuestion.Qn_In}_${question.columnName}.json`
+                : inspectorView === "core"
                 ? `question_${question.displayIndex || question.number}_schema_v2.json`
                 : selectedLocaleCode === "all"
                 ? `translations_all_${question.id}.json`
@@ -170,7 +181,9 @@ export function AdvancedTab({
                         </h3>
                     </div>
                     <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
-                        {inspectorView === "core"
+                        {inspectorView === "production"
+                            ? "This question exactly as the field app's questionnaire stores it: all 28 fields, with numbering, show-if and repeater links as they'll be written."
+                            : inspectorView === "core"
                             ? "Full source-of-truth question schema (v2.0) including validation constraints, visibility logic, repeater parameters, and Advanced Settings."
                             : selectedLocaleCode === "all"
                             ? `All modular translation resource files (v1.0) holding user-facing text only for ${nonDefaultLocales.length} configured language${nonDefaultLocales.length === 1 ? "" : "s"}. Advanced Settings are strictly excluded.`
@@ -184,6 +197,19 @@ export function AdvancedTab({
                     <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-zinc-100/70 dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 text-xs flex-wrap">
                         {/* Left: View Tabs (Fixed Left Alignment - No Layout Shift) */}
                         <div className="flex items-center p-0.5 rounded-md bg-zinc-200/70 dark:bg-zinc-800 border border-zinc-200/80 dark:border-zinc-700/60 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setInspectorView("production")}
+                                className={cn(
+                                    "flex items-center gap-1.5 px-2.5 py-1 rounded text-[11px] font-medium transition-all cursor-pointer",
+                                    inspectorView === "production"
+                                        ? "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs"
+                                        : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                                )}
+                            >
+                                <Smartphone className="h-3 w-3" />
+                                <span>Production</span>
+                            </button>
                             <button
                                 type="button"
                                 onClick={() => setInspectorView("core")}
@@ -307,7 +333,9 @@ export function AdvancedTab({
                         <div className="flex items-center gap-1.5 truncate">
                             <FileJson className="h-3 w-3 text-zinc-500 dark:text-zinc-400 shrink-0" />
                             <span className="text-zinc-800 dark:text-zinc-200 font-semibold">
-                                {inspectorView === "core"
+                                {inspectorView === "production"
+                                    ? `Q${productionQuestion.Qn_In} · ${productionQuestion.Qn_Type}`
+                                    : inspectorView === "core"
                                     ? `question_${question.displayIndex || question.number}.json`
                                     : selectedLocaleCode === "all"
                                     ? `translations/*.json (${nonDefaultLocales.length} manifests)`
@@ -315,7 +343,9 @@ export function AdvancedTab({
                             </span>
                             <span className="text-zinc-400 dark:text-zinc-600 text-xs hidden sm:inline">•</span>
                             <span className="text-zinc-500 dark:text-zinc-400 text-[10px] font-sans truncate hidden sm:inline">
-                                {inspectorView === "core"
+                                {inspectorView === "production"
+                                    ? `Qn_Num ${productionQuestion.Qn_Num} | Column: ${productionQuestion.Column_Name}`
+                                    : inspectorView === "core"
                                     ? `ID: ${question.id} | Column: ${question.columnName}`
                                     : selectedLocaleCode === "all"
                                     ? `Multi-resource bundle | ${nonDefaultLocales.map((l) => l.code).join(", ")}`
@@ -323,7 +353,7 @@ export function AdvancedTab({
                             </span>
                         </div>
                         <span className="text-[10px] text-zinc-500 dark:text-zinc-400 shrink-0 font-sans">
-                            {inspectorView === "core" ? "Schema v2.0 • Canonical" : "Schema v1.0 • Decoupled Strings"}
+                            {inspectorView === "production" ? "Field app questionnaire" : inspectorView === "core" ? "Schema v2.0 • Canonical" : "Schema v1.0 • Decoupled Strings"}
                         </span>
                     </div>
 

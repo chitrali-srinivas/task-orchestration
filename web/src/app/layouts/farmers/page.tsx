@@ -11,7 +11,7 @@ import { FARMER_STATUSES, FARMER_STATUS_LABEL, Farmer, FarmerAction, Task } from
 import { Job, Surveyor, Village } from "@/lib/orchestration/jobs";
 import { farmerAction, loadFarmers, loadJobs, loadSurveyors, loadToday, loadVillages, refreshTasks } from "@/lib/orchestration/store";
 import { useCurrentRole } from "@/lib/current-role";
-import { REGISTRATION_SURVEY_ID } from "../survey-builder/lib/system-fields";
+import { isRegistrationSurvey } from "../survey-builder/lib/system-fields";
 import { Workflow, loadWorkflows } from "../survey-workflow/workflow-store";
 import { SurveyService } from "../survey-builder/services/survey-service";
 import { SurveyModel } from "../survey-builder/types/survey-schema";
@@ -187,7 +187,7 @@ export default function FarmersPage() {
                     totalCount={serverTable.totalCount}
                     role={role}
                     onAction={act}
-                    registrationSurvey={surveys.find((s) => s.id === selectedRecord?.farmer.registration?.surveyId) ?? surveys.find((s) => s.id === REGISTRATION_SURVEY_ID)}
+                    registrationSurvey={surveys.find((s) => s.id === selectedRecord?.farmer.registration?.surveyId) ?? surveys.find((s) => isRegistrationSurvey(s))}
                 />
 
                 <TasksFilterSheet
