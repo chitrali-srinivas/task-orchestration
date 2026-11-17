@@ -6,7 +6,7 @@
 import * as React from "react";
 import type { TableDataSource } from "@/lib/server-table";
 import { useMockTableDataSource } from "@/mocks/server-table";
-import { STATUS, type Farmer } from "@/lib/orchestration/engine";
+import { FARMER_STATUS_LABEL, STATUS, farmerStatusOf, type Farmer } from "@/lib/orchestration/engine";
 import { Village, stopLocation } from "@/lib/orchestration/jobs";
 import type { TaskRecord } from "@/app/layouts/tasks/data/schema";
 import { FarmerFilters, FarmerLocationSource, FarmerRecord } from "./schema";
@@ -35,10 +35,13 @@ export function buildFarmerRecords(farmers: Farmer[], taskRecords: TaskRecord[],
         const next = tasks
             .filter((t) => t.status === STATUS.planned && t.visitDate && t.jobStatus !== "closed")
             .sort((a, b) => (a.visitDate! < b.visitDate! ? -1 : 1))[0];
+        const status = farmerStatusOf(f);
         return {
             id: f.id,
             name: f.name || "(unnamed farmer)",
             village: f.village || "",
+            status,
+            statusLabel: FARMER_STATUS_LABEL[status],
             locationSource: source,
             locationLabel: LOCATION_LABEL[source],
             location: located ? { lat: located.lat, lng: located.lng } : undefined,

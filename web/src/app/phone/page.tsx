@@ -13,8 +13,9 @@ import { SurveyModel } from "@/app/layouts/survey-builder/types/survey-schema";
 import { PreviewAllQuestions } from "@/app/layouts/survey-builder/components/preview/preview-runtime";
 import { isQuestionVisible } from "@/app/layouts/survey-builder/lib/logic-evaluator";
 import { Workflow } from "@/app/layouts/survey-workflow/workflow-store";
-import { Farmer, LatLng, LocationSource, STATUS, Task, isPendingOnApp } from "@/lib/orchestration/engine";
-import { JOB_STATUS, Job, JobStatus, Surveyor, Village, distanceKm, openJobsByTask, stopLocation, unfinishedStops } from "@/lib/orchestration/jobs";
+import { REGISTRATION_SURVEY_ID } from "@/app/layouts/survey-builder/lib/system-fields";
+import { DEFAULT_START_STATUS, FARMER_STATUS, FARMER_STATUS_LABEL, Farmer, LatLng, LocationSource, STATUS, Subject, Task, farmerIdOf, farmerStatusOf, isPendingOnApp } from "@/lib/orchestration/engine";
+import { JOB_STATUS, Job, JobStatus, Surveyor, Village, distanceKm, openJobsByTask, stopKey, subjectLocation, unfinishedStops } from "@/lib/orchestration/jobs";
 import {
     phoneWorkflows,
     jobAction,
@@ -33,8 +34,9 @@ import {
 } from "@/lib/orchestration/store";
 
 /**
- * Surveyor phone (simulation). Registering a farmer fills the workflow's first survey; the
- * engine then creates the next tasks immediately, and they show up under Pending.
+ * Surveyor phone (simulation). Registering a farmer fills the built-in Farmer Registration survey (outside any
+ * workflow); the farmer starts as Registered, and each active workflow starts for them once they reach its start
+ * status (verified by default, set on the Farmers page), so their tasks show up under Pending then.
  * "Today" can be moved to see day-based tasks appear and expire; Reset deletes all farmers, tasks and jobs.
  * Picking a surveyor shows their jobs (assigned on the HQ Plans page): accept or decline, start, visit the stops in
  * order, and close the job sheet with a reason for anything not done; then the pending tasks no job holds.
@@ -43,7 +45,6 @@ import {
 export default function PhonePage() {
     const [today, setToday] = useState("");
     const [workflows, setWorkflows] = useState<Workflow[]>([]);
-    const [workflowId, setWorkflowId] = useState("");
     const [surveys, setSurveys] = useState<SurveyModel[]>([]);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [farmers, setFarmers] = useState<Farmer[]>([]);
@@ -55,9 +56,7 @@ export default function PhonePage() {
     useEffect(() => {
         const t = loadToday();
         setToday(t);
-        const wfs = phoneWorkflows();
-        setWorkflows(wfs);
-        setWorkflowId(wfs[0]?.id || "");
+        setWorkflows(phoneWorkflows());
         setTasks(refreshTasks(t));
         setFarmers(loadFarmers());
         setSurveyors(loadSurveyors());
@@ -86,7 +85,6 @@ export default function PhonePage() {
         setJobs([]);
         setConfirmReset(false);
     };
-    const workflow = workflows.find((w) => w.id === workflowId) || null;
     const surveyor = surveyors.find((s) => s.id === surveyorId);
 
     return (
@@ -95,24 +93,25 @@ export default function PhonePage() {
                 {/* Simulation controls */}
                 <div className="w-full space-y-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-2xs dark:border-zinc-800 dark:bg-zinc-900 md:w-64">
                     <h1 className="text-sm font-bold">Surveyor phone</h1>
-                    <p className="text-[11px] text-zinc-500">Simulation of the app. Tasks come from the active workflow.</p>
+                    <p className="text-[11px] text-zinc-500">Simulation of the app. Tasks come from the active workflows, once a farmer reaches a workflow&apos;s start status.</p>
                     <div className="space-y-1">
                         <Label htmlFor="ph-today" className="text-xs">Today</Label>
                         <Input id="ph-today" type="date" value={today} onChange={(e) => changeToday(e.target.value)} className="h-8 text-xs" />
                     </div>
                     <div className="space-y-1">
-                        <Label className="text-xs">Workflow</Label>
+                        <Label className="text-xs">Workflows</Label>
                         {workflows.length === 0 ? (
-                            <p className="text-[11px] text-rose-600">
-                                No workflow yet. Create one in <a href="/layouts/survey-workflow" className="underline">Survey Workflow</a>.
+                            <p className="text-[11px] text-zinc-500">
+                                No workflow yet. Create one in <a href="/layouts/survey-workflow" className="underline">Survey Workflow</a>; registering farmers works without one.
                             </p>
                         ) : (
-                            <Select value={workflowId} onValueChange={setWorkflowId}>
-                                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {workflows.map((w) => <SelectItem key={w.id} value={w.id} className="text-xs">{w.name} <span className="text-zinc-400">· {w.status}</span></SelectItem>)}
-                                </SelectContent>
-                            </Select>
+                            <ul className="space-y-0.5 text-[11px] text-zinc-600 dark:text-zinc-300">
+                                {workflows.map((w) => (
+                                    <li key={w.id}>
+                                        {w.name} <span className="text-zinc-400">· {w.status === "active" ? `starts at ${FARMER_STATUS_LABEL[w.startOn ?? DEFAULT_START_STATUS]}` : `${w.status}, not started`}</span>
+                                    </li>
+                                ))}
+                            </ul>
                         )}
                     </div>
                     <div className="space-y-1">
@@ -153,7 +152,6 @@ export default function PhonePage() {
                 <div className="mx-auto w-[320px] overflow-hidden rounded-[2rem] border-[6px] border-zinc-900 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-950" style={{ height: 640 }}>
                     <PhoneApp
                         today={today}
-                        workflow={workflow}
                         surveys={surveys}
                         tasks={tasks}
                         farmers={farmers}
@@ -177,7 +175,6 @@ const LOCATION_LABEL: Record<LocationSource, string> = { gps: "GPS", plot: "plot
 
 interface PhoneAppProps {
     today: string;
-    workflow: Workflow | null;
     surveys: SurveyModel[];
     tasks: Task[];
     farmers: Farmer[];
@@ -199,7 +196,7 @@ const PHONE_JOB_LABEL: Partial<Record<JobStatus, string>> = {
     [JOB_STATUS.inProgress]: "In progress",
 };
 
-function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, jobs, villageMaster, onTasks, onJobs, onFarmers }: PhoneAppProps) {
+function PhoneApp({ today, surveys, tasks, farmers, surveyor, jobs, villageMaster, onTasks, onJobs, onFarmers }: PhoneAppProps) {
     const [screen, setScreen] = useState<Screen>({ name: "tasks" });
     const [declining, setDeclining] = useState<{ jobId: string; reason: string } | null>(null);
     const [village, setVillage] = useState<string>("all");
@@ -208,7 +205,8 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, jobs, vi
     const surveyById = useMemo(() => new Map(surveys.map((s) => [s.id, s])), [surveys]);
     const farmerById = useMemo(() => new Map(farmers.map((f) => [f.id, f])), [farmers]);
     const villages = Array.from(new Set(farmers.map((f) => f.village).filter(Boolean))).sort();
-    const inVillage = (farmerId: string) => village === "all" || farmerById.get(farmerId)?.village === village;
+    const farmerOf = (subject: Subject) => farmerById.get(farmerIdOf(subject) ?? "");
+    const inVillage = (subject: Subject) => village === "all" || farmerOf(subject)?.village === village;
 
     // With a surveyor picked, Pending shows their jobs, then the pending tasks no open job holds (tasks on another
     // surveyor's job, or on a created job HQ hasn't sent yet, are not theirs to do).
@@ -220,15 +218,15 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, jobs, vi
     const base: LatLng | undefined = villageMaster.find((v) => v.id === surveyor?.baseVillageId)?.centre;
     /** A job's stops with their tasks, the leg from the previous stop (the first from the base village) and done-ness. */
     const stopsOf = (job: Job) => {
-        const locations = job.stops.map((stop) => stopLocation(farmerById.get(stop.farmerId), villageMaster));
+        const locations = job.stops.map((stop) => subjectLocation(stop.subject, farmerById, villageMaster));
         return job.stops
             .map((stop, i) => {
                 const from = i === 0 ? base : locations[i - 1];
                 const km = from && locations[i] ? distanceKm(from, locations[i]!) : undefined;
                 const stopTasks = stop.taskIds.map((id) => taskById.get(id)).filter((t): t is Task => Boolean(t));
-                return { no: i + 1, farmerId: stop.farmerId, tasks: stopTasks, km, source: locations[i]?.source, done: stopTasks.every((t) => t.status !== STATUS.planned) };
+                return { no: i + 1, subject: stop.subject, tasks: stopTasks, km, source: locations[i]?.source, done: stopTasks.every((t) => t.status !== STATUS.planned) };
             })
-            .filter((st) => inVillage(st.farmerId));
+            .filter((st) => inVillage(st.subject));
     };
     /** The surveyor can open a job's tasks once it is accepted (or started) and its day has come. */
     const workable = (job: Job) => (job.status === JOB_STATUS.accepted || job.status === JOB_STATUS.inProgress) && job.date <= today;
@@ -236,9 +234,9 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, jobs, vi
     const act = (jobId: string, action: "accept" | "decline" | "start", note?: string) => onJobs(jobAction(jobId, action, { by: surveyor?.name ?? "Surveyor", note }));
 
     const pending = tasks
-        .filter((t) => isPendingOnApp(t, today) && inVillage(t.farmerId) && !(surveyor && held.has(t.id)))
+        .filter((t) => isPendingOnApp(t, today) && inVillage(t.subject) && !(surveyor && held.has(t.id)))
         .sort((a, b) => a.taskNo - b.taskNo);
-    const completed = tasks.filter((t) => t.status !== STATUS.planned && t.status !== STATUS.expired && inVillage(t.farmerId)).sort((a, b) => b.taskNo - a.taskNo);
+    const completed = tasks.filter((t) => t.status !== STATUS.planned && t.status !== STATUS.expired && inVillage(t.subject)).sort((a, b) => b.taskNo - a.taskNo);
 
     const header = (
         <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
@@ -266,23 +264,22 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, jobs, vi
         </div>
     );
 
-    // The workflow's starting survey is always open: it is how a farmer enters the workflow.
-    const rootStep = workflow?.steps.find((st) => st.parentId === null);
-    const rootSurvey = rootStep ? surveyById.get(rootStep.surveyId) : undefined;
-    const startCard = rootSurvey && (
+    // The built-in registration survey is always open: it is how every farmer starts.
+    const registration = surveyById.get(REGISTRATION_SURVEY_ID);
+    const startCard = registration && (
         <button
             type="button"
             onClick={() => setScreen({ name: "register" })}
             className="w-full rounded-lg border border-dashed border-zinc-400 p-3 text-left hover:border-zinc-900 dark:hover:border-zinc-100"
         >
-            <div className="font-mono text-[10px] text-zinc-500">Start · always open</div>
-            <div className="mt-1 text-xs font-semibold">Survey: {rootSurvey.name}</div>
+            <div className="font-mono text-[10px] text-zinc-500">Always open</div>
+            <div className="mt-1 text-xs font-semibold">Survey: {registration.name}</div>
             <div className="text-[11px] text-zinc-600 dark:text-zinc-300">Register a new farmer</div>
         </button>
     );
 
     const taskCard = (t: Task) => {
-        const f = farmerById.get(t.farmerId);
+        const f = farmerOf(t.subject);
         const s = surveyById.get(t.surveyId);
         return (
             <button
@@ -374,9 +371,9 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, jobs, vi
 
                             {stops.length === 0 && <p className="py-1 text-center text-[11px] text-zinc-400">No stops in this village.</p>}
                             {stops.map((st) => {
-                                const farmer = farmerById.get(st.farmerId);
+                                const farmer = farmerOf(st.subject);
                                 return (
-                                    <div key={st.farmerId} className={cn("space-y-2 rounded-lg border border-zinc-200 p-2 dark:border-zinc-800", st.done && "opacity-60")}>
+                                    <div key={stopKey(st.subject)} className={cn("space-y-2 rounded-lg border border-zinc-200 p-2 dark:border-zinc-800", st.done && "opacity-60")}>
                                         <div className="flex items-start justify-between gap-2 px-1">
                                             <div className="min-w-0">
                                                 <div className="truncate text-xs font-bold">Stop {st.no} · {farmer?.name || "?"}</div>
@@ -420,7 +417,7 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, jobs, vi
         return (
             <SurveyForm
                 title={`T${screen.task.taskNo} · ${s?.name || "Survey"}`}
-                subtitle={`Farmer: ${farmerById.get(screen.task.farmerId)?.name || ""}`}
+                subtitle={`Farmer: ${farmerOf(screen.task.subject)?.name || ""}`}
                 survey={s}
                 onBack={() => setScreen({ name: "tasks" })}
                 onSubmit={(answers) => {
@@ -451,18 +448,17 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, jobs, vi
     }
 
     if (screen.name === "register") {
-        const rootStep = workflow?.steps.find((st) => st.parentId === null);
-        const s = rootStep ? surveyById.get(rootStep.surveyId) : undefined;
+        const s = registration;
         return (
             <SurveyForm
                 title={s ? `Survey: ${s.name}` : "Register farmer"}
                 subtitle="New farmer"
                 survey={s}
                 submitLabel="Register"
-                emptyMessage={!workflow ? "No workflow." : !rootStep ? "The workflow has no first survey after Start." : "The first survey of the workflow no longer exists."}
+                emptyMessage="The Farmer Registration survey is loading."
                 onBack={() => setScreen({ name: "farmers" })}
                 onSubmit={(answers) => {
-                    const res = registerFarmer({ workflow: workflow!, rootStepId: rootStep!.id, questions: s!.questions, response: answers, today });
+                    const res = registerFarmer({ surveyId: s!.id, surveyVersion: s!.version, questions: s!.questions, response: answers, today, by: surveyor?.name ?? "Surveyor" });
                     onFarmers([...farmers, res.farmer]);
                     onTasks(res.tasks);
                     setVillage("all");
@@ -486,12 +482,17 @@ function PhoneApp({ today, workflow, surveys, tasks, farmers, surveyor, jobs, vi
                         </Button>
                     </div>
                     {list.length === 0 ? (
-                        <p className="py-8 text-center text-xs text-zinc-400">No farmers yet. Register one to start the workflow.</p>
+                        <p className="py-8 text-center text-xs text-zinc-400">No farmers yet. Register one; workflows start once HQ verifies them.</p>
                     ) : (
                         list.map((f) => (
                             <div key={f.id} className="rounded-lg bg-zinc-100 p-3 dark:bg-zinc-900">
-                                <div className="text-xs font-semibold">{f.name}</div>
-                                <div className="text-[11px] text-zinc-500">{f.village || "No village"} · {tasks.filter((t) => t.farmerId === f.id).length} tasks</div>
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="truncate text-xs font-semibold">{f.name}</div>
+                                    <span className={cn("shrink-0 text-[10px] font-semibold", farmerStatusOf(f) === FARMER_STATUS.blacklisted ? "text-rose-600" : farmerStatusOf(f) === FARMER_STATUS.verified ? "text-emerald-700" : "text-zinc-500")}>
+                                        {FARMER_STATUS_LABEL[farmerStatusOf(f)]}
+                                    </span>
+                                </div>
+                                <div className="text-[11px] text-zinc-500">{f.village || "No village"} · {tasks.filter((t) => farmerIdOf(t.subject) === f.id).length} tasks</div>
                             </div>
                         ))
                     )}
@@ -563,7 +564,7 @@ function CloseJobSheetScreen({ job, unfinished, farmerName, taskLabel, isPlanned
                         </p>
                         {unfinished.map((i) => (
                             <div key={i} className="space-y-1 rounded-lg bg-zinc-100 p-2.5 dark:bg-zinc-900">
-                                <div className="text-xs font-semibold">Stop {i + 1} · {farmerName(job.stops[i].farmerId)}</div>
+                                <div className="text-xs font-semibold">Stop {i + 1} · {farmerName(farmerIdOf(job.stops[i].subject) ?? "")}</div>
                                 <div className="text-[10px] text-zinc-500">{job.stops[i].taskIds.filter(isPlanned).map(taskLabel).join(", ")} not done</div>
                                 <Input
                                     placeholder="Reason (e.g. farmer away)"

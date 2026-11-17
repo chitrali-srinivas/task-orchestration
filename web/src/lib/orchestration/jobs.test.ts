@@ -2,6 +2,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Farmer, Task } from "./engine.ts";
+
+/** A farmer subject (tasks and stops point at subjects). */
+const f = (id: string) => ({ kind: "farmer" as const, id });
 import {
     addToJob,
     applyJobAction,
@@ -34,7 +37,7 @@ const task = (id: string, taskNo: number, farmerId: string, extra: Partial<Task>
     workflowId: "wf1",
     stepId: "s",
     surveyId: "s_enr",
-    farmerId,
+    subject: f(farmerId),
     status: "planned",
     plannedStart: "2026-10-20",
     createdAt: "",
@@ -64,8 +67,8 @@ test("add to job: one stop per farmer, the farmer's other due tasks come along, 
     assert.equal(jobs[0].status, "created");
     assert.equal(jobs[0].jobNo, 1);
     assert.deepEqual(jobs[0].stops, [
-        { farmerId: "f1", taskIds: ["t2", "t1"] },
-        { farmerId: "f2", taskIds: ["t3"] },
+        { subject: f("f1"), taskIds: ["t2", "t1"] },
+        { subject: f("f2"), taskIds: ["t3"] },
     ]);
     assert.equal(openJobsByTask(jobs).get("t3")?.stopNo, 2);
 });
@@ -73,11 +76,11 @@ test("add to job: one stop per farmer, the farmer's other due tasks come along, 
 test("add to job: appends to the surveyor's job for the day, moves tasks off another editable job, never past capacity", () => {
     let jobs = addToJob({ ...add, jobs: [], taskIds: ["t3"] });
     jobs = addToJob({ ...add, jobs, taskIds: ["t1"], newId: "j2" });
-    assert.deepEqual(jobs.map((j) => j.stops.map((s) => s.farmerId)), [["f2", "f1"]]);
+    assert.deepEqual(jobs.map((j) => j.stops.map((s) => s.subject.id)), [["f2", "f1"]]);
 
     assert.deepEqual(planAddToJob({ ...add, jobs, taskIds: ["t3"], surveyorId: "asha" }).moved.map((m) => m.from.id), ["j1"]);
     jobs = addToJob({ ...add, jobs, taskIds: ["t3"], surveyorId: "asha", newId: "j3" });
-    assert.deepEqual(jobs.map((j) => [j.surveyorId, j.jobNo, j.stops.map((s) => s.farmerId)]), [["ravi", 1, ["f1"]], ["asha", 2, ["f2"]]]);
+    assert.deepEqual(jobs.map((j) => [j.surveyorId, j.jobNo, j.stops.map((s) => s.subject.id)]), [["ravi", 1, ["f1"]], ["asha", 2, ["f2"]]]);
 
     assert.equal(planAddToJob({ ...add, jobs: [], taskIds: ["t1", "t3"], maxVisits: 1 }).overCapacity, true);
     assert.deepEqual(addToJob({ ...add, jobs: [], taskIds: ["t1", "t3"], maxVisits: 1 }), []);
@@ -114,13 +117,13 @@ test("lifecycle: created → assigned → accepted → in progress → closed; d
 test("editing until accepted: reorder, move a stop within capacity, delete only created jobs, removing tasks keeps the job", () => {
     let jobs = addToJob({ ...add, jobs: [], taskIds: ["t1", "t3"] });
     jobs = reorderStop(jobs, "j1", 1, 0, "");
-    assert.deepEqual(jobs[0].stops.map((s) => s.farmerId), ["f2", "f1"]);
+    assert.deepEqual(jobs[0].stops.map((s) => s.subject.id), ["f2", "f1"]);
 
-    const other: Job = { ...jobs[0], id: "j2", jobNo: 2, surveyorId: "asha", stops: [{ farmerId: "f9", taskIds: ["x"] }] };
+    const other: Job = { ...jobs[0], id: "j2", jobNo: 2, surveyorId: "asha", stops: [{ subject: f("f9"), taskIds: ["x"] }] };
     jobs = [...jobs, other];
     assert.equal(moveStop(jobs, "j1", 0, "j2", 1, ""), jobs); // asha is full
     const moved = moveStop(jobs, "j1", 0, "j2", 8, "");
-    assert.deepEqual(moved.map((j) => j.stops.map((s) => s.farmerId)), [["f1"], ["f9", "f2"]]);
+    assert.deepEqual(moved.map((j) => j.stops.map((s) => s.subject.id)), [["f1"], ["f9", "f2"]]);
 
     assert.deepEqual(removeTasks(moved, ["t1", "t2"], "")[0].stops, []);
     const assigned = applyJobAction(moved, "j2", "assign", ctx);
@@ -149,8 +152,8 @@ const plan = (extra: Partial<Parameters<typeof planJobs>[0]> = {}) =>
 
 test("planner: nearby farmers go to the nearest surveyor; no location is unplanned; jobs are round trips from the base", () => {
     const p = plan();
-    assert.deepEqual(p.jobs.map((j) => [j.surveyorId, j.stops.map((s) => s.farmerId)]), [["west", ["a", "c"]], ["east", ["b", "d"]]]);
-    assert.deepEqual(p.unplanned, [{ stop: { farmerId: "e", taskIds: ["pe"] }, reason: "no-location" }]);
+    assert.deepEqual(p.jobs.map((j) => [j.surveyorId, j.stops.map((s) => s.subject.id)]), [["west", ["a", "c"]], ["east", ["b", "d"]]]);
+    assert.deepEqual(p.unplanned, [{ stop: { subject: f("e"), taskIds: ["pe"] }, reason: "no-location" }]);
     assert.equal(p.jobs[0].km, 0); // both farmers at the base village centre
 
     const created = jobsFromPlan([], p, "2026-10-27", (i) => `j${i}`, "now");
@@ -166,20 +169,20 @@ test("day start: home when set, else the base village centre, else none; the pla
 
     // East's surveyor lives in the west: the western farmers now go to them, and the eastern ones to the other.
     const p = plan({ surveyors: [surveyor("west", "ve"), atHome] });
-    assert.deepEqual(p.jobs.map((j) => [j.surveyorId, j.stops.map((s) => s.farmerId)]), [["west", ["b", "d"]], ["east", ["a", "c"]]]);
+    assert.deepEqual(p.jobs.map((j) => [j.surveyorId, j.stops.map((s) => s.subject.id)]), [["west", ["b", "d"]], ["east", ["a", "c"]]]);
     assert.equal(p.jobs[1].km, 0); // both farmers at the home point
 });
 
 test("planner: capacity leaves the least urgent stops unplanned; busy surveyors and held tasks are skipped", () => {
     const p = plan({ surveyors: [surveyor("west", "vw", 1)], taskIds: ["pa", "pc", "pb"] });
-    assert.deepEqual(p.jobs.map((j) => j.stops.map((s) => s.farmerId)), [["a"]]); // pa is the most urgent (earliest end)
-    assert.deepEqual(p.unplanned.map((u) => [u.stop.farmerId, u.reason]), [["b", "no-capacity"], ["c", "no-capacity"]]);
+    assert.deepEqual(p.jobs.map((j) => j.stops.map((s) => s.subject.id)), [["a"]]); // pa is the most urgent (earliest end)
+    assert.deepEqual(p.unplanned.map((u) => [u.stop.subject.id, u.reason]), [["b", "no-capacity"], ["c", "no-capacity"]]);
 
     const jobs = addToJob({ jobs: [], tasks: ptasks, taskIds: ["pb"], surveyorId: "east", date: "2026-10-27", maxVisits: 8, newId: "j1", now: "", by: "HQ" });
     const q = plan({ jobs });
     assert.deepEqual(q.busy.map((b) => b.surveyorId), ["east"]);
     assert.deepEqual(q.skipped, [{ taskId: "pb", reason: "on-job" }]);
-    assert.deepEqual(q.jobs.map((j) => [j.surveyorId, j.stops.map((s) => s.farmerId)]), [["west", ["a", "c", "d"]]]);
+    assert.deepEqual(q.jobs.map((j) => [j.surveyorId, j.stops.map((s) => s.subject.id)]), [["west", ["a", "c", "d"]]]);
 });
 
 test("visiting order: nearest next from the base, then crossings removed", () => {
@@ -205,14 +208,14 @@ test("stop location: registration GPS, else the village centre matched by name; 
 // Points on a plane (x, y) with straight-line distance keep the numbers easy to check; the base is at the origin.
 const at = (x: number, y = 0) => ({ lat: y, lng: x });
 const line = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => Math.hypot(a.lat - b.lat, a.lng - b.lng);
-const planeRoute = (xy: Record<string, [number, number]>) => ({ locate: (id: string) => (id in xy ? at(...xy[id]) : undefined), base: at(0), distance: line });
+const planeRoute = (xy: Record<string, [number, number]>) => ({ locate: (s: { id: string }) => (s.id in xy ? at(...xy[s.id]) : undefined), base: at(0), distance: line });
 const jobOf = (stops: string[], extra: Partial<Job> = {}): Job => ({
     id: "j1",
     jobNo: 1,
     date: "2026-10-27",
     surveyorId: "ravi",
     status: "created",
-    stops: stops.map((farmerId) => ({ farmerId, taskIds: [`t_${farmerId}`] })),
+    stops: stops.map((farmerId) => ({ subject: f(farmerId), taskIds: [`t_${farmerId}`] })),
     history: [],
     createdAt: "",
     updatedAt: "",
@@ -231,21 +234,21 @@ test("added stops go where they add the least distance, without moving the other
     // Round trip base → a (0,10) → b (10,10) → base; c sits on the a–b leg, e beyond b.
     const route = planeRoute({ a: [0, 10], b: [10, 10], c: [5, 10], e: [15, 10] });
     const stops = jobOf(["a", "b"]).stops;
-    assert.equal(cheapestPosition(stops, "c", route), 1);
-    assert.equal(cheapestPosition(stops, "e", route), 2);
-    assert.equal(cheapestPosition(stops, "nowhere", route), 2);
+    assert.equal(cheapestPosition(stops, f("c"), route), 1);
+    assert.equal(cheapestPosition(stops, f("e"), route), 2);
+    assert.equal(cheapestPosition(stops, f("nowhere"), route), 2);
 
     const tasks = [task("t_a", 1, "a"), task("t_b", 2, "b"), task("t_c", 3, "c")];
     let jobs = addToJob({ jobs: [], tasks, taskIds: ["t_a", "t_b"], surveyorId: "ravi", date: "2026-10-27", maxVisits: 8, newId: "j1", now: "", by: "HQ", route });
     jobs = addToJob({ jobs, tasks, taskIds: ["t_c"], surveyorId: "ravi", date: "2026-10-27", maxVisits: 8, newId: "j2", now: "", by: "HQ", route });
-    assert.deepEqual(jobs[0].stops.map((s) => s.farmerId), ["a", "c", "b"]);
+    assert.deepEqual(jobs[0].stops.map((s) => s.subject.id), ["a", "c", "b"]);
 });
 
 test("re-optimise orders the stops for the shortest round trip, unlocated last; accepted jobs stay as they are", () => {
     // Corners of a square around the base: the shortest round trip goes around it, not across.
     const route = planeRoute({ a: [0, 10], b: [10, 10], c: [10, 0] });
     const jobs = [jobOf(["b", "u", "c", "a"])];
-    assert.deepEqual(reoptimiseJob(jobs, "j1", route, "")[0].stops.map((s) => s.farmerId), ["c", "b", "a", "u"]);
+    assert.deepEqual(reoptimiseJob(jobs, "j1", route, "")[0].stops.map((s) => s.subject.id), ["c", "b", "a", "u"]);
     const ordered = [jobOf(["c", "b", "a"])];
     assert.equal(reoptimiseJob(ordered, "j1", route, ""), ordered);
     const accepted = [jobOf(["b", "a"], { status: "accepted" })];
@@ -267,10 +270,10 @@ test("change surveyor: only before acceptance, to someone free that day with eno
 
 test("rearranging: a saved order must name every stop once; accepted jobs can't be rearranged", () => {
     const jobs = [jobOf(["a", "b", "c"])];
-    assert.deepEqual(setStopOrder(jobs, "j1", ["c", "a", "b"], "")[0].stops.map((s) => s.farmerId), ["c", "a", "b"]);
-    assert.equal(setStopOrder(jobs, "j1", ["a", "b", "c"], ""), jobs); // unchanged order
-    assert.equal(setStopOrder(jobs, "j1", ["a", "b"], ""), jobs); // missing a stop
-    assert.equal(setStopOrder(jobs, "j1", ["a", "a", "b"], ""), jobs);
+    assert.deepEqual(setStopOrder(jobs, "j1", ["farmer:c", "farmer:a", "farmer:b"], "")[0].stops.map((s) => s.subject.id), ["c", "a", "b"]);
+    assert.equal(setStopOrder(jobs, "j1", ["farmer:a", "farmer:b", "farmer:c"], ""), jobs); // unchanged order
+    assert.equal(setStopOrder(jobs, "j1", ["farmer:a", "farmer:b"], ""), jobs); // missing a stop
+    assert.equal(setStopOrder(jobs, "j1", ["farmer:a", "farmer:a", "farmer:b"], ""), jobs);
     const accepted = [jobOf(["a", "b"], { status: "accepted" })];
-    assert.equal(setStopOrder(accepted, "j1", ["b", "a"], ""), accepted);
+    assert.equal(setStopOrder(accepted, "j1", ["farmer:b", "farmer:a"], ""), accepted);
 });

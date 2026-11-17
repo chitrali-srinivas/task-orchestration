@@ -3,6 +3,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { addDays, expireTasks, farmerFromResponse, isPendingOnApp, nextTasks, rootTasks, type Task } from "./engine.ts";
 
+const F1 = { kind: "farmer" as const, id: "f1" };
+
 const wf = {
     id: "wf1",
     name: "Kharif",
@@ -23,7 +25,7 @@ const ids = (p: string) => (i: number) => `${p}${i}`;
 const base = { workflow: wf, today: "2026-10-15", now: "2026-10-15T00:00:00Z" };
 
 test("registration creates the root task, planned today", () => {
-    const t = rootTasks({ ...base, farmerId: "f1", existing: [], nextTaskNo: 1, newId: ids("r") });
+    const t = rootTasks({ ...base, subject: F1, existing: [], nextTaskNo: 1, newId: ids("r") });
     assert.equal(t.length, 1);
     assert.equal(t[0].surveyId, "s_reg");
     assert.equal(t[0].status, "planned");
@@ -31,7 +33,7 @@ test("registration creates the root task, planned today", () => {
 });
 
 test("collected registration immediately creates the enrollment task; End creates nothing", () => {
-    const reg: Task = { ...rootTasks({ ...base, farmerId: "f1", existing: [], nextTaskNo: 1, newId: ids("r") })[0], status: "collected" };
+    const reg: Task = { ...rootTasks({ ...base, subject: F1, existing: [], nextTaskNo: 1, newId: ids("r") })[0], status: "collected" };
     const next = nextTasks({ ...base, task: reg, existing: [reg], nextTaskNo: 2, newId: ids("n") });
     assert.deepEqual(next.map((t) => t.surveyId), ["s_enr"]);
     assert.equal(next[0].parentTaskId, reg.id);
@@ -42,7 +44,7 @@ test("collected registration immediately creates the enrollment task; End create
 });
 
 test("branching: verified enrollment creates deployment (+7 days) and sample (fixed date)", () => {
-    const enr: Task = { id: "e", taskNo: 2, workflowId: "wf1", stepId: "enr", surveyId: "s_enr", farmerId: "f1", status: "verified", plannedStart: "2026-10-15", createdAt: "", updatedAt: "" };
+    const enr: Task = { id: "e", taskNo: 2, workflowId: "wf1", stepId: "enr", surveyId: "s_enr", subject: F1, status: "verified", plannedStart: "2026-10-15", createdAt: "", updatedAt: "" };
     const next = nextTasks({ ...base, task: enr, existing: [enr], nextTaskNo: 3, newId: ids("n") });
     assert.deepEqual(next.map((t) => [t.surveyId, t.plannedStart, t.plannedEnd]), [
         ["s_dep", "2026-10-22", "2026-12-31"],
@@ -53,7 +55,7 @@ test("branching: verified enrollment creates deployment (+7 days) and sample (fi
 });
 
 test("future tasks are hidden on the app until their day; planned tasks expire after validity", () => {
-    const t: Task = { id: "d", taskNo: 3, workflowId: "wf1", stepId: "dep", surveyId: "s_dep", farmerId: "f1", status: "planned", plannedStart: "2026-10-22", plannedEnd: "2026-12-31", createdAt: "", updatedAt: "" };
+    const t: Task = { id: "d", taskNo: 3, workflowId: "wf1", stepId: "dep", surveyId: "s_dep", subject: F1, status: "planned", plannedStart: "2026-10-22", plannedEnd: "2026-12-31", createdAt: "", updatedAt: "" };
     assert.equal(isPendingOnApp(t, "2026-10-21"), false);
     assert.equal(isPendingOnApp(t, "2026-10-22"), true);
     assert.equal(expireTasks([t], "2026-12-31", "")[0].status, "planned");
@@ -65,7 +67,7 @@ test("addDays crosses month ends", () => {
 });
 
 test("field trigger: n days after a date answered in the previous survey, else after the condition day", () => {
-    const dep: Task = { id: "d", taskNo: 3, workflowId: "wf1", stepId: "dep", surveyId: "s_dep", farmerId: "f1", status: "collected", plannedStart: "2026-10-22", createdAt: "", updatedAt: "", response: { q_sowing: "2026-11-05" } };
+    const dep: Task = { id: "d", taskNo: 3, workflowId: "wf1", stepId: "dep", surveyId: "s_dep", subject: F1, status: "collected", plannedStart: "2026-10-22", createdAt: "", updatedAt: "", response: { q_sowing: "2026-11-05" } };
     const withDate = nextTasks({ ...base, today: "2026-11-10", task: dep, existing: [dep], nextTaskNo: 4, newId: ids("n") });
     assert.deepEqual(withDate.map((t) => [t.surveyId, t.plannedStart]), [["s_eng", "2026-12-05"]]);
 

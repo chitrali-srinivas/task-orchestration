@@ -6,7 +6,22 @@
 
 import { Workflow, loadWorkflows } from "@/app/layouts/survey-workflow/workflow-store";
 import { loadMasterRecords } from "@/app/layouts/survey-builder/lib/master-data-registry";
-import { Farmer, QuestionRef, STATUS, Task, expireTasks, farmerFromResponse, nextTasks, rootTasks } from "./engine";
+import {
+    FARMER_STATUS,
+    Farmer,
+    FarmerAction,
+    QuestionRef,
+    STATUS,
+    Task,
+    applyFarmerAction,
+    expireTasks,
+    farmerFromResponse,
+    farmerIdOf,
+    farmerStatusOf,
+    migrateTask,
+    nextTasks,
+    workflowStartTasks,
+} from "./engine";
 import {
     ActionContext,
     DEFAULT_MAX_VISITS,
@@ -23,10 +38,11 @@ import {
     dayStart,
     deleteJob,
     jobsFromPlan,
+    migrateJob,
     openJobsByTask,
     removeTasks,
     setStopOrder,
-    stopLocation,
+    subjectLocation,
 } from "./jobs";
 
 const TASKS_KEY = "mati.tasks";
@@ -54,7 +70,13 @@ function write(key: string, value: unknown) {
     }
 }
 
-export const loadTasks = () => dedupeIds(read<Task[]>(TASKS_KEY, []));
+/** Tasks, with any saved before subjects (farmerId) converted and saved back once. */
+export function loadTasks(): Task[] {
+    const raw = read<(Task & { farmerId?: string })[]>(TASKS_KEY, []);
+    const tasks = raw.map(migrateTask);
+    if (tasks.some((t, i) => t !== raw[i])) saveTasks(tasks);
+    return dedupeIds(tasks);
+}
 export const loadFarmers = () => read<Farmer[]>(FARMERS_KEY, []);
 export const saveTasks = (t: Task[]) => write(TASKS_KEY, t);
 export const saveFarmers = (f: Farmer[]) => write(FARMERS_KEY, f);
@@ -77,7 +99,10 @@ export function loadJobs(): Job[] {
             window.localStorage.removeItem(LEGACY_ROUTES_KEY);
         }
     }
-    return read<Job[]>(JOBS_KEY, []);
+    const raw = read<Job[]>(JOBS_KEY, []);
+    const jobs = raw.map(migrateJob);
+    if (jobs.some((j, i) => j !== raw[i])) saveJobs(jobs);
+    return jobs;
 }
 
 /** Simulation settings kept by the phone: the simulated "today" and which surveyor the phone belongs to. */
@@ -160,34 +185,73 @@ export const phoneWorkflows = () =>
         .filter((w) => w.status !== "completed")
         .sort((a, b) => (a.status === "active" ? 0 : 1) - (b.status === "active" ? 0 : 1));
 
-/** Apply expiry for `today` and persist. Called by pages on load / when the date changes. */
+/** Start the active workflows for farmers who reached their start status (adds only what's missing). */
+function withStartTasks(tasks: Task[], farmers: Farmer[], today: string): Task[] {
+    const created = workflowStartTasks({ workflows: loadWorkflows(), farmers, existing: tasks, today, nextTaskNo: nextNo(tasks), newId: newIds("task"), now: nowIso() });
+    return created.length > 0 ? [...tasks, ...created] : tasks;
+}
+
+/**
+ * Apply expiry for `today`, start workflows for farmers who reached their start status (e.g. a workflow that just
+ * became active), and persist. Called by pages on load / when the date changes.
+ */
 export function refreshTasks(today: string): Task[] {
     const before = loadTasks();
-    const after = expireTasks(before, today, nowIso());
-    if (after.some((t, i) => t !== before[i])) saveTasks(after);
+    const after = withStartTasks(expireTasks(before, today, nowIso()), loadFarmers(), today);
+    if (after.length !== before.length || after.some((t, i) => t !== before[i])) saveTasks(after);
     return after;
 }
 
 /**
- * Surveyor registers a farmer by filling the workflow's first survey (nothing else is asked).
- * The farmer's name and village are read from the answers. Creates the farmer, the registration
- * task (already collected, with the response), then lets the engine create whatever follows
- * "collected" in the workflow.
+ * Surveyor registers a farmer with the built-in Farmer Registration survey (not part of any workflow). Name, village
+ * and location come from its system fields; the answers are kept on the farmer, who starts as Registered. Workflows
+ * that start on Registered begin now; the others begin when the farmer reaches their start status (verified).
  */
-export function registerFarmer(input: { workflow: Workflow; rootStepId: string; questions: QuestionRef[]; response: Record<string, unknown>; today: string }) {
+export function registerFarmer(input: { surveyId: string; surveyVersion?: number; questions: QuestionRef[]; response: Record<string, unknown>; today: string; by: string }) {
     const now = nowIso();
     const farmers = loadFarmers();
     const { name, village, location } = farmerFromResponse(input.questions, input.response, `Farmer ${farmers.length + 1}`);
-    const farmer: Farmer = { id: `farmer_${Date.now()}`, name, village, ...(location ? { location } : {}), createdAt: now };
-    saveFarmers([...farmers, farmer]);
-
-    let tasks = loadTasks();
-    const roots = rootTasks({ workflow: input.workflow, farmerId: farmer.id, existing: tasks, today: input.today, nextTaskNo: nextNo(tasks), newId: newIds("task"), now });
-    tasks = [...tasks, ...roots];
-    const reg = tasks.find((t) => t.farmerId === farmer.id && t.stepId === input.rootStepId);
-    if (reg) tasks = applyStatus(tasks, input.workflow, reg.id, STATUS.collected, input.today, input.response);
+    const farmer: Farmer = {
+        id: `farmer_${Date.now()}`,
+        name,
+        village,
+        ...(location ? { location } : {}),
+        status: FARMER_STATUS.registered,
+        history: [{ action: "register", status: FARMER_STATUS.registered, at: now, by: input.by }],
+        registration: { surveyId: input.surveyId, surveyVersion: input.surveyVersion, response: input.response, at: now, by: input.by },
+        createdAt: now,
+    };
+    const all = [...farmers, farmer];
+    saveFarmers(all);
+    const tasks = withStartTasks(loadTasks(), all, input.today);
     saveTasks(tasks);
     return { farmer, tasks };
+}
+
+/**
+ * HQ moves a farmer's status (NOC received, verified, blacklist, lift blacklist). Blacklisting cancels the farmer's
+ * planned tasks and takes them off jobs not yet accepted; reaching a workflow's start status starts it. Not allowed:
+ * nothing changes (undefined).
+ */
+export function farmerAction(farmerId: string, action: FarmerAction, ctx: { by: string; note?: string; today: string }) {
+    const now = nowIso();
+    const farmers = loadFarmers();
+    const farmer = farmers.find((f) => f.id === farmerId);
+    const updated = farmer && applyFarmerAction(farmer, action, { by: ctx.by, note: ctx.note, now });
+    if (!updated) return undefined;
+    const all = farmers.map((f) => (f.id === farmerId ? updated : f));
+    saveFarmers(all);
+
+    let tasks = loadTasks();
+    if (updated.status === FARMER_STATUS.blacklisted) {
+        const reason = `Farmer blacklisted: ${ctx.note?.trim()}`;
+        const cancel = tasks.filter((t) => farmerIdOf(t.subject) === farmerId && t.status === STATUS.planned).map((t) => t.id);
+        tasks = tasks.map((t) => (cancel.includes(t.id) ? { ...t, status: STATUS.cancelled, statusComment: reason, updatedAt: now } : t));
+        if (cancel.length > 0) saveJobs(removeTasks(loadJobs(), cancel, now));
+    }
+    tasks = withStartTasks(tasks, all, ctx.today);
+    saveTasks(tasks);
+    return { farmer: updated, farmers: all, tasks };
 }
 
 /** Surveyor submits a pending task from the phone. The first task submitted on an accepted job starts the job. */
@@ -219,18 +283,21 @@ function applyStatus(tasks: Task[], workflow: Workflow, taskId: string, status: 
     const now = nowIso();
     const updated = tasks.map((t) => (t.id === taskId ? { ...t, status, updatedAt: now, ...(response ? { response } : {}), ...(comment ? { statusComment: comment } : {}) } : t));
     const task = updated.find((t) => t.id === taskId)!;
-    const created = nextTasks({ workflow, task, existing: updated, today, nextTaskNo: nextNo(updated), newId: newIds("task"), now });
+    // A blacklisted farmer gets no new tasks.
+    const farmerId = farmerIdOf(task.subject);
+    const blacklisted = farmerId !== undefined && farmerStatusOf(loadFarmers().find((f) => f.id === farmerId)) === FARMER_STATUS.blacklisted;
+    const created = blacklisted ? [] : nextTasks({ workflow, task, existing: updated, today, nextTaskNo: nextNo(updated), newId: newIds("task"), now });
     return [...updated, ...created];
 }
 
 const maxVisitsOf = (surveyorId: string) => loadSurveyors().find((s) => s.id === surveyorId)?.maxVisitsPerDay ?? DEFAULT_MAX_VISITS;
 
-/** Farmer locations and where the surveyor's day starts (home, else base village), for placing and ordering stops. */
+/** Subject locations and where the surveyor's day starts (home, else base village), for placing and ordering stops. */
 function routeContext(surveyorId: string): RouteContext {
     const villages = loadVillages();
     const farmerById = new Map(loadFarmers().map((f) => [f.id, f]));
     const base = dayStart(loadSurveyors().find((s) => s.id === surveyorId), villages)?.at;
-    return { locate: (farmerId) => stopLocation(farmerById.get(farmerId), villages), base };
+    return { locate: (subject) => subjectLocation(subject, farmerById, villages), base };
 }
 
 const updateJobs = (change: (jobs: Job[], now: string) => Job[]): Job[] => {
@@ -249,7 +316,7 @@ export const jobAction = (jobId: string, action: JobMove, ctx: Omit<ActionContex
 
 /**
  * HQ adds tasks to a surveyor's job for a day (a new created job if they have none), or moves them there from
- * another job. The same farmers' other tasks due that day come along, since one visit covers them; a new stop goes
+ * another job. The same subjects' other tasks due that day come along, since one visit covers them; a new stop goes
  * where it adds the least distance. An accepted job or over capacity: nothing changes.
  */
 export const addTasksToJob = (taskIds: string[], surveyorId: string, date: string) =>
@@ -268,8 +335,8 @@ export const addTasksToJob = (taskIds: string[], surveyorId: string, date: strin
         })
     );
 
-/** HQ saves a rearranged stop order. */
-export const saveJobOrder = (jobId: string, farmerIds: string[]) => updateJobs((jobs, now) => setStopOrder(jobs, jobId, farmerIds, now));
+/** HQ saves a rearranged stop order (stop keys, jobs.ts stopKey). */
+export const saveJobOrder = (jobId: string, keys: string[]) => updateJobs((jobs, now) => setStopOrder(jobs, jobId, keys, now));
 
 /** HQ hands a job (not yet accepted) to another surveyor. */
 export const changeJobSurveyor = (jobId: string, surveyorId: string) =>

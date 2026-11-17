@@ -368,6 +368,8 @@ export interface SurveyAvailabilityConfig {
 
 export interface SurveyModel {
     id: string;
+    /** Built-in surveys defined in code (lib/registration-survey.ts); only a Super Admin edits them. */
+    systemSurvey?: "farmer_registration";
     azId: string;
     name: string;
     description?: string;

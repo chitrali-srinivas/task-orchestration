@@ -1,15 +1,17 @@
 "use client";
 
 // Farmers — every farmer registered on the phone, built like the Tasks page (layouts/tasks) and reusing its table,
-// toolbar and filter sheet: location tabs with counts (where planning finds each farmer), filter sheet, column toggle,
-// server-driven table (useServerTable + data/data-source.ts), and a detail sheet per row with the farmer's tasks.
-// Newest registrations first.
+// toolbar and filter sheet: status tabs with counts (Registered → NOC received → Verified, or Blacklisted), filter
+// sheet, column toggle, server-driven table (useServerTable + data/data-source.ts), and a detail sheet per row with the
+// status actions, the status history and the farmer's tasks. Newest registrations first.
 import * as React from "react";
 import { NavBarType4 } from "@/components/nav-bars/NavBarType4";
 import { useServerTable } from "@/lib/server-table";
-import { Farmer, Task } from "@/lib/orchestration/engine";
+import { FARMER_STATUSES, FARMER_STATUS_LABEL, Farmer, FarmerAction, Task } from "@/lib/orchestration/engine";
 import { Job, Surveyor, Village } from "@/lib/orchestration/jobs";
-import { loadFarmers, loadJobs, loadSurveyors, loadToday, loadVillages, refreshTasks } from "@/lib/orchestration/store";
+import { farmerAction, loadFarmers, loadJobs, loadSurveyors, loadToday, loadVillages, refreshTasks } from "@/lib/orchestration/store";
+import { useCurrentRole } from "@/lib/current-role";
+import { REGISTRATION_SURVEY_ID } from "../survey-builder/lib/system-fields";
 import { Workflow, loadWorkflows } from "../survey-workflow/workflow-store";
 import { SurveyService } from "../survey-builder/services/survey-service";
 import { SurveyModel } from "../survey-builder/types/survey-schema";
@@ -37,6 +39,7 @@ export default function FarmersPage() {
     const [isSheetOpen, setIsSheetOpen] = React.useState(false);
     const [filterSheetOpen, setFilterSheetOpen] = React.useState(false);
     const [initialFilterField, setInitialFilterField] = React.useState<string | null>(null);
+    const role = useCurrentRole();
 
     React.useEffect(() => {
         setTasks(refreshTasks(loadToday()));
@@ -63,25 +66,35 @@ export default function FarmersPage() {
 
     const tabs: StatusTab[] = React.useMemo(() => {
         const fallback: Record<string, number> = { all: records.length };
-        records.forEach((r) => (fallback[r.locationSource] = (fallback[r.locationSource] ?? 0) + 1));
+        records.forEach((r) => (fallback[r.status] = (fallback[r.status] ?? 0) + 1));
         const counts = serverTable.summaryCounts ?? fallback;
-        return [{ value: ALL, label: "All", count: counts.all ?? 0 }, ...LOCATION_SOURCES.map((s) => ({ value: s, label: LOCATION_LABEL[s], count: counts[s] ?? 0 }))];
+        return [{ value: ALL, label: "All", count: counts.all ?? 0 }, ...FARMER_STATUSES.map((s) => ({ value: s, label: FARMER_STATUS_LABEL[s], count: counts[s] ?? 0 }))];
     }, [records, serverTable.summaryCounts]);
 
     const handleTabChange = (value: string) => {
         setActiveTab(value);
-        serverTable.setFilter("tabLocation", value === ALL ? undefined : (value as FarmerFilters["tabLocation"]));
+        serverTable.setFilter("tabStatus", value === ALL ? undefined : (value as FarmerFilters["tabStatus"]));
     };
 
     const handleClearFilters = React.useCallback(() => {
-        serverTable.clearFilters(activeTab === ALL ? {} : { tabLocation: activeTab as FarmerFilters["tabLocation"] });
+        serverTable.clearFilters(activeTab === ALL ? {} : { tabStatus: activeTab as FarmerFilters["tabStatus"] });
     }, [activeTab, serverTable]);
 
-    // The location column is shown on the All tab only; on a location tab every row has that source.
+    // The status column is shown on the All tab only; on a status tab every row has that status.
     const columns = React.useMemo(
-        () => (activeTab === ALL ? farmerColumns : farmerColumns.filter((c) => (c as { accessorKey?: string }).accessorKey !== "locationSource")),
+        () => (activeTab === ALL ? farmerColumns : farmerColumns.filter((c) => (c as { accessorKey?: string }).accessorKey !== "status")),
         [activeTab]
     );
+
+    /** HQ moves a farmer's status; the store cancels a blacklisted farmer's tasks and starts workflows. */
+    const act = (farmerId: string, action: FarmerAction, note?: string) => {
+        const res = farmerAction(farmerId, action, { by: role, note, today: loadToday() });
+        if (!res) return false;
+        setFarmers(res.farmers);
+        setTasks(res.tasks);
+        setJobs(loadJobs());
+        return true;
+    };
 
     const filterFields: FilterField[] = React.useMemo(() => {
         const villageNames = Array.from(new Set(records.map((r) => r.village).filter(Boolean))).sort();
@@ -118,14 +131,14 @@ export default function FarmersPage() {
     const currentIndex = selectedId ? serverTable.data.findIndex((r) => r.id === selectedId) : -1;
     const position = currentIndex >= 0 ? serverTable.pagination.pageIndex * serverTable.pagination.pageSize + currentIndex : -1;
 
-    const emptyTitle = records.length === 0 ? "No farmers yet" : activeTab === ALL ? "No farmers found" : `No farmers with ${LOCATION_LABEL[activeTab as keyof typeof LOCATION_LABEL].toLowerCase()}`;
+    const emptyTitle = records.length === 0 ? "No farmers yet" : activeTab === ALL ? "No farmers found" : `No ${FARMER_STATUS_LABEL[activeTab as keyof typeof FARMER_STATUS_LABEL].toLowerCase()} farmers`;
     const emptyDescription = records.length === 0 ? "Register a farmer in the Phone simulator to see them here." : "Try another tab or clear the filters.";
 
     return (
         <NavBarType4
             pageTitle="Farmers"
             activeItemUrl="/layouts/farmers"
-            pageDescription="Every farmer registered on the phone: where planning finds them, their tasks by status and their next visit. Open a farmer to see all of their tasks."
+            pageDescription="Every farmer registered on the phone and where they are in onboarding (Registered, NOC received, Verified, Blacklisted). Workflows start for a farmer once they're verified. Open a farmer to move their status or see their tasks."
         >
             <div className="flex flex-col h-[calc(100vh-64px)] p-6 overflow-hidden min-w-0 w-full">
                 <div className="bg-white dark:bg-zinc-950 flex-1 min-h-0 flex flex-col min-w-0 overflow-hidden w-full">
@@ -172,6 +185,9 @@ export default function FarmersPage() {
                     isLast={currentIndex === serverTable.data.length - 1}
                     currentIndex={position}
                     totalCount={serverTable.totalCount}
+                    role={role}
+                    onAction={act}
+                    registrationSurvey={surveys.find((s) => s.id === selectedRecord?.farmer.registration?.surveyId) ?? surveys.find((s) => s.id === REGISTRATION_SURVEY_ID)}
                 />
 
                 <TasksFilterSheet

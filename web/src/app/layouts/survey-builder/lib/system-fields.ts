@@ -1,10 +1,11 @@
 /**
  * System fields: questions planning can't work without, defined here in code (like the masters).
  *
- * Every Farmer Enrollment survey (the survey that registers a farmer, the workflow's first step) holds a farmer name,
- * a village and a plot boundary. Each carries a fixed `systemKey`, so the planner reads it by key instead of guessing
- * from titles. In the builder they can't be deleted, duplicated, retyped, made optional, hidden by logic or put in a
- * repeater; wording, hint, translations, position and limits (points, area) stay editable.
+ * The built-in Farmer Registration survey (lib/registration-survey.ts: the one survey that registers farmers, outside
+ * any workflow) holds a farmer name, a village and a plot boundary. Each carries a fixed `systemKey`, so the planner
+ * reads it by key instead of guessing from titles. In the builder they can't be deleted, duplicated, retyped, made
+ * optional, hidden by logic or put in a repeater, not even by a Super Admin; wording, hint, translations, position
+ * and limits (points, area) stay editable.
  *
  * Pure: no React, no storage. Run the tests with: node --test src/app/layouts/survey-builder/lib/system-fields.test.ts
  */
@@ -12,8 +13,13 @@ import type { BackendQuestionType, QuestionModel, SurveyModel } from "../types/s
 
 export type SystemFieldKey = "farmer.name" | "farmer.village" | "farmer.plot";
 
-/** The category (lib/category-registry.ts, id `farmer_enrollment`) whose surveys register farmers. */
+/** The category (lib/category-registry.ts, id `farmer_enrollment`) of the built-in registration survey. */
 export const FARMER_ENROLLMENT = "Farmer Enrollment";
+
+/** Id of the built-in Farmer Registration survey: always present, edited only by a Super Admin. */
+export const REGISTRATION_SURVEY_ID = "srv_farmer_registration";
+export const isRegistrationSurvey = (survey: { id?: string; systemSurvey?: string } | undefined) =>
+    survey?.id === REGISTRATION_SURVEY_ID || survey?.systemSurvey === "farmer_registration";
 
 export interface SystemFieldDefinition {
     key: SystemFieldKey;
@@ -148,13 +154,13 @@ function newQuestion(def: SystemFieldDefinition, questions: QuestionModel[]): Qu
 }
 
 /**
- * Bring a survey's system fields in line with its category. Farmer Enrollment: tag the questions that already ask for
- * them (or add the missing ones at the top, in SYSTEM_FIELDS order) and lock them. Any other category: untag, so the
- * questions become ordinary ones. Returns the same survey when nothing changed; renumbering is left to the caller.
+ * Bring a survey's system fields in line: the registration survey gets them (questions that already ask for them are
+ * tagged, missing ones added at the top in SYSTEM_FIELDS order) and they're locked. Any other survey loses the tags,
+ * so those questions become ordinary ones. Returns the same survey when nothing changed; renumbering is the caller's.
  */
-export function syncSystemFields<S extends Pick<SurveyModel, "category" | "questions">>(survey: S): S {
+export function syncSystemFields<S extends Pick<SurveyModel, "id" | "systemSurvey" | "questions">>(survey: S): S {
     let questions = survey.questions;
-    if (!isFarmerEnrollment(survey)) {
+    if (!isRegistrationSurvey(survey)) {
         if (!questions.some((q) => q.systemKey)) return survey;
         return {
             ...survey,
@@ -198,14 +204,14 @@ export interface SystemFieldIssue {
     message: string;
 }
 
-/** What stops a Farmer Enrollment survey from being published: a system field missing or changed. */
-export function systemFieldIssues(survey: Pick<SurveyModel, "category" | "questions">): SystemFieldIssue[] {
-    if (!isFarmerEnrollment(survey)) return [];
+/** What stops the registration survey from being published: a system field missing or changed. */
+export function systemFieldIssues(survey: Pick<SurveyModel, "id" | "systemSurvey" | "questions">): SystemFieldIssue[] {
+    if (!isRegistrationSurvey(survey)) return [];
     const issues: SystemFieldIssue[] = [];
     SYSTEM_FIELDS.forEach((def) => {
         const tagged = survey.questions.filter((q) => q.systemKey === def.key);
         if (tagged.length === 0) {
-            issues.push({ key: def.key, message: `${def.label} is missing. Farmer Enrollment surveys must ask for it: ${def.purpose}` });
+            issues.push({ key: def.key, message: `${def.label} is missing. The registration survey must ask for it: ${def.purpose}` });
             return;
         }
         if (tagged.length > 1) issues.push({ key: def.key, questionId: tagged[1].id, message: `${def.label} is asked more than once.` });

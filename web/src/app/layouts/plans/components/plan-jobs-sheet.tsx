@@ -14,8 +14,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
-import { STATUS, type Farmer, type LatLng, type Task } from "@/lib/orchestration/engine"
-import { Job, JobPlan, Surveyor, UnplannedReason, Village, byUrgency, dayStart, distanceKm, openJobFor, openJobsByTask, planJobs, stopLocation, visitableOn } from "@/lib/orchestration/jobs"
+import { STATUS, farmerIdOf, type Farmer, type LatLng, type Task } from "@/lib/orchestration/engine"
+import { Job, JobPlan, Surveyor, UnplannedReason, Village, byUrgency, dayStart, distanceKm, openJobFor, openJobsByTask, planJobs, stopKey, stopLocation, subjectLocation, visitableOn } from "@/lib/orchestration/jobs"
 import { cn } from "@/lib/utils"
 import { baseOf } from "../data/data-source"
 import { formatKm, formatYmd } from "./columns"
@@ -67,7 +67,7 @@ export function PlanJobsSheet({ today, jobs, tasks, farmers, surveyors, villages
     const [surveyorIds, setSurveyorIds] = React.useState<Set<string>>(() => new Set(active.map((s) => s.id)))
     // null = every farmer listed; otherwise only these (from the Tasks page, or after unticking).
     const [picked, setPicked] = React.useState<Set<string> | null>(() =>
-        initialTaskIds.length > 0 ? new Set(initialTaskIds.map((id) => taskById.get(id)?.farmerId).filter((f): f is string => Boolean(f))) : null
+        initialTaskIds.length > 0 ? new Set(initialTaskIds.map((id) => farmerIdOf(taskById.get(id)?.subject)).filter((f): f is string => Boolean(f))) : null
     )
     const [query, setQuery] = React.useState("")
 
@@ -77,9 +77,12 @@ export function PlanJobsSheet({ today, jobs, tasks, farmers, surveyors, villages
         const due = tasks.filter((t) => visitableOn(t, date) && !held.has(t.id)).sort(byUrgency)
         const out: { farmerId: string; taskIds: string[] }[] = []
         due.forEach((t) => {
-            const c = out.find((x) => x.farmerId === t.farmerId)
+            // Plan jobs picks farmers; tasks about other kinds of subject aren't planned here yet.
+            const farmerId = farmerIdOf(t.subject)
+            if (!farmerId) return
+            const c = out.find((x) => x.farmerId === farmerId)
             if (c) c.taskIds.push(t.id)
-            else out.push({ farmerId: t.farmerId, taskIds: [t.id] })
+            else out.push({ farmerId, taskIds: [t.id] })
         })
         return out
     }, [jobs, tasks, date])
@@ -240,7 +243,7 @@ export function PlanJobsSheet({ today, jobs, tasks, farmers, surveyors, villages
                                 {plan.jobs.map((j) => {
                                     const s = surveyors.find((x) => x.id === j.surveyorId)
                                     const base = baseOf(s, villages)
-                                    const locs = j.stops.map((st) => stopLocation(farmerById.get(st.farmerId), villages))
+                                    const locs = j.stops.map((st) => subjectLocation(st.subject, farmerById, villages))
                                     return (
                                         <div key={j.surveyorId} className="rounded-lg border border-zinc-200 dark:border-zinc-800">
                                             <div className="flex items-center justify-between gap-2 border-b border-zinc-100 dark:border-zinc-800 px-4 py-2.5">
@@ -251,11 +254,11 @@ export function PlanJobsSheet({ today, jobs, tasks, farmers, surveyors, villages
                                             </div>
                                             <ol className="divide-y divide-zinc-50 dark:divide-zinc-900">
                                                 {j.stops.map((st, i) => {
-                                                    const f = farmerById.get(st.farmerId)
+                                                    const f = farmerById.get(farmerIdOf(st.subject) ?? "")
                                                     const from: LatLng | undefined = i === 0 ? base : locs[i - 1]
                                                     const leg = from && locs[i] ? distanceKm(from, locs[i]!) : undefined
                                                     return (
-                                                        <li key={st.farmerId} className="flex items-center gap-3 px-4 py-2 text-xs">
+                                                        <li key={stopKey(st.subject)} className="flex items-center gap-3 px-4 py-2 text-xs">
                                                             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-[10px] font-bold text-white dark:bg-zinc-100 dark:text-zinc-900">
                                                                 {i + 1}
                                                             </span>
@@ -282,8 +285,8 @@ export function PlanJobsSheet({ today, jobs, tasks, farmers, surveyors, villages
                                         </div>
                                         <ul className="divide-y divide-amber-100 dark:divide-amber-900/30">
                                             {plan.unplanned.map((u) => (
-                                                <li key={u.stop.farmerId} className="px-4 py-2 text-xs">
-                                                    <span className="font-semibold text-zinc-900 dark:text-zinc-100">{farmerById.get(u.stop.farmerId)?.name}</span>
+                                                <li key={stopKey(u.stop.subject)} className="px-4 py-2 text-xs">
+                                                    <span className="font-semibold text-zinc-900 dark:text-zinc-100">{farmerById.get(farmerIdOf(u.stop.subject) ?? "")?.name}</span>
                                                     <span className="text-zinc-600 dark:text-zinc-400"> · {u.stop.taskIds.map(code).join(", ")}</span>
                                                     <div className="text-[11px] text-amber-800 dark:text-amber-400">{UNPLANNED_TEXT[u.reason]}</div>
                                                 </li>

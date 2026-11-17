@@ -1,8 +1,8 @@
 /**
  * Jobs (pure): a surveyor's visits for one day, the job lifecycle, and the planner that creates jobs.
  *
- * A job is one surveyor, one date and an ordered list of stops: one stop per farmer visit, covering all of that
- * farmer's tasks due that day. Assignment is not a task status (statuses belong to the survey templates): a task is
+ * A job is one surveyor, one date and an ordered list of stops: one stop per subject visited (a farmer today),
+ * covering all of that subject's tasks due that day. Assignment is not a task status (statuses belong to the survey templates): a task is
  * held by the open job it is on, and by one open job at most.
  *
  * Lifecycle: created (planner draft, HQ reviews) → assigned (on the surveyor's phone) → accepted → in progress →
@@ -14,10 +14,13 @@
  * is passed (a routing service's road distances plug in there without changing the screens).
  */
 
-import type { Farmer, LatLng, Located, STATUS, Task } from "./engine";
+import type { Farmer, LatLng, Located, STATUS, Subject, Task } from "./engine";
 
 // Type-only imports above keep this file runnable by `node --test` without path resolution.
 const PLANNED: typeof STATUS.planned = "planned";
+/** One string per subject (engine.ts subjectKey, repeated here to keep this file free of runtime imports). */
+export const stopKey = (s: Subject) => `${s.kind}:${s.id}`;
+const same = (a: Subject, b: Subject) => a.kind === b.kind && a.id === b.id;
 
 /** Farmer visits a surveyor can make in a day when the Users master leaves it empty. */
 export const DEFAULT_MAX_VISITS = 8;
@@ -78,8 +81,9 @@ export const JOB_STATUS_NAME: Record<JobStatus, string> = {
 };
 
 export interface JobStop {
-    farmerId: string;
-    /** The farmer's tasks done on this visit. */
+    /** Who or what is visited (a farmer today). */
+    subject: Subject;
+    /** The subject's tasks done on this visit. */
     taskIds: string[];
     /** Given when the job sheet is closed with some of the stop's tasks still planned. */
     notDoneReason?: string;
@@ -113,6 +117,16 @@ export interface Job {
     updatedAt: string;
 }
 
+/** Jobs saved before subjects had `farmerId` on each stop; they become farmer subjects. Same job back when unchanged. */
+export function migrateJob(job: Job): Job {
+    const old = job.stops as (JobStop & { farmerId?: string })[];
+    if (!old.some((s) => !s.subject && s.farmerId)) return job;
+    return {
+        ...job,
+        stops: old.map(({ farmerId, ...s }) => (s.subject || !farmerId ? (s as JobStop) : { ...s, subject: { kind: "farmer" as const, id: farmerId } })),
+    };
+}
+
 export const isOpen = (job: Job) => job.status !== JOB_STATUS.closed;
 /** Stops can be added, removed, moved and reordered until the surveyor accepts the job. */
 export const isEditable = (job: Job) => job.status === JOB_STATUS.created || job.status === JOB_STATUS.assigned;
@@ -142,6 +156,11 @@ export function stopLocation(farmer: Farmer | undefined, villages: Village[]): L
     if (farmer.location) return farmer.location;
     const centre = farmer.village ? villages.find((v) => sameName(v.name, farmer.village))?.centre : undefined;
     return centre ? { ...centre, source: "village" } : undefined;
+}
+
+/** Where a subject is visited. A new subject kind adds its own case here. */
+export function subjectLocation(subject: Subject, farmerById: Map<string, Farmer>, villages: Village[]): Located | undefined {
+    return subject.kind === "farmer" ? stopLocation(farmerById.get(subject.id), villages) : undefined;
 }
 
 /** Straight-line (great-circle) distance in km. Road distances come with a routing service. */
@@ -289,35 +308,35 @@ export const reorderStop = (jobs: Job[], jobId: string, from: number, to: number
 export const removeStop = (jobs: Job[], jobId: string, index: number, now: string) =>
     edit(jobs, jobId, now, (stops) => (index >= 0 && index < stops.length ? stops.filter((_, i) => i !== index) : null));
 
-/** Move a stop to another editable job on the same day (merged into the farmer's stop there); not past its capacity. */
+/** Move a stop to another editable job on the same day (merged into the subject's stop there); not past its capacity. */
 export function moveStop(jobs: Job[], jobId: string, index: number, toJobId: string, maxVisits: number, now: string): Job[] {
     const from = jobs.find((j) => j.id === jobId);
     const to = jobs.find((j) => j.id === toJobId);
     const stop = from?.stops[index];
     if (!from || !to || !stop || from.id === to.id || !isEditable(from) || !isEditable(to) || from.date !== to.date) return jobs;
-    const merging = to.stops.some((s) => s.farmerId === stop.farmerId);
+    const merging = to.stops.some((s) => same(s.subject, stop.subject));
     if (!merging && to.stops.length >= maxVisits) return jobs;
     const removed = removeStop(jobs, jobId, index, now);
     return edit(removed, toJobId, now, (stops) => {
-        const existing = stops.find((s) => s.farmerId === stop.farmerId);
+        const existing = stops.find((s) => same(s.subject, stop.subject));
         if (existing) existing.taskIds.push(...stop.taskIds.filter((id) => !existing.taskIds.includes(id)));
-        else stops.push({ farmerId: stop.farmerId, taskIds: [...stop.taskIds] });
+        else stops.push({ subject: stop.subject, taskIds: [...stop.taskIds] });
         return stops;
     });
 }
 
-/** How to place stops by distance: each farmer's location and the surveyor's base village. */
+/** How to place stops by distance: each subject's location and where the surveyor's day starts. */
 export interface RouteContext {
-    locate: (farmerId: string) => LatLng | undefined;
+    locate: (subject: Subject) => LatLng | undefined;
     base?: LatLng;
     distance?: DistanceFn;
 }
 
 /** Where a new stop adds the least to the round trip, without moving the others (ties go later); the end when it has no location. */
-export function cheapestPosition(stops: JobStop[], farmerId: string, route: RouteContext): number {
-    const loc = route.locate(farmerId);
+export function cheapestPosition(stops: JobStop[], subject: Subject, route: RouteContext): number {
+    const loc = route.locate(subject);
     if (!loc) return stops.length;
-    const points = stops.map((s) => route.locate(s.farmerId));
+    const points = stops.map((s) => route.locate(s.subject));
     let best = stops.length;
     let bestKm = Infinity;
     for (let p = stops.length; p >= 0; p--) {
@@ -332,9 +351,9 @@ export function cheapestPosition(stops: JobStop[], farmerId: string, route: Rout
 
 /** The stops in the shortest round-trip order (the planner's ordering); stops without a location go last. */
 export function bestOrder(stops: JobStop[], route: RouteContext): JobStop[] {
-    const located = stops.filter((s) => route.locate(s.farmerId));
-    const rest = stops.filter((s) => !route.locate(s.farmerId));
-    const order = orderStops(located.map((s) => route.locate(s.farmerId)!), route.base, route.distance);
+    const located = stops.filter((s) => route.locate(s.subject));
+    const rest = stops.filter((s) => !route.locate(s.subject));
+    const order = orderStops(located.map((s) => route.locate(s.subject)!), route.base, route.distance);
     return [...order.map((i) => located[i]), ...rest];
 }
 
@@ -345,12 +364,12 @@ export const reoptimiseJob = (jobs: Job[], jobId: string, route: RouteContext, n
         return next.every((s, i) => s === stops[i]) ? null : next;
     });
 
-/** Put an editable job's stops in the given farmer order (HQ rearranged them); it must name every stop once. */
-export const setStopOrder = (jobs: Job[], jobId: string, farmerIds: string[], now: string) =>
+/** Put an editable job's stops in the given order of stop keys (HQ rearranged them); it must name every stop once. */
+export const setStopOrder = (jobs: Job[], jobId: string, keys: string[], now: string) =>
     edit(jobs, jobId, now, (stops) => {
-        const byFarmer = new Map(stops.map((s) => [s.farmerId, s]));
-        if (farmerIds.length !== stops.length || new Set(farmerIds).size !== stops.length || !farmerIds.every((id) => byFarmer.has(id))) return null;
-        return farmerIds.every((id, i) => id === stops[i].farmerId) ? null : farmerIds.map((id) => byFarmer.get(id)!);
+        const byKey = new Map(stops.map((s) => [stopKey(s.subject), s]));
+        if (keys.length !== stops.length || new Set(keys).size !== stops.length || !keys.every((k) => byKey.has(k))) return null;
+        return keys.every((k, i) => k === stopKey(stops[i].subject)) ? null : keys.map((k) => byKey.get(k)!);
     });
 
 /** Hand an editable job to another surveyor who has no open job that day and enough visits; recorded in the history. */
@@ -388,11 +407,11 @@ function skipReason(t: Task, date: string, held: Map<string, JobRef>, target?: J
     return undefined;
 }
 
-/** One stop per farmer: the picked tasks plus the same farmers' other due tasks that no open job holds. */
-function withFarmersOtherTasks(picked: Task[], tasks: Task[], held: Map<string, JobRef>, date: string) {
-    const farmers = new Set(picked.map((t) => t.farmerId));
+/** One stop per subject: the picked tasks plus the same subjects' other due tasks that no open job holds. */
+function withSubjectsOtherTasks(picked: Task[], tasks: Task[], held: Map<string, JobRef>, date: string) {
+    const subjects = new Set(picked.map((t) => stopKey(t.subject)));
     const pickedIds = new Set(picked.map((t) => t.id));
-    const added = tasks.filter((t) => farmers.has(t.farmerId) && !pickedIds.has(t.id) && !held.has(t.id) && visitableOn(t, date)).sort(byUrgency);
+    const added = tasks.filter((t) => subjects.has(stopKey(t.subject)) && !pickedIds.has(t.id) && !held.has(t.id) && visitableOn(t, date)).sort(byUrgency);
     return { all: [...picked, ...added].sort(byUrgency), added };
 }
 
@@ -403,13 +422,13 @@ export interface AddPlan {
     locked: boolean;
     /** Tasks that end up on the job, most urgent first (selected ones plus `added`). */
     taskIds: string[];
-    /** The same farmers' other due tasks no open job holds: one visit covers them all. */
+    /** The same subjects' other due tasks no open job holds: one visit covers them all. */
     added: string[];
     /** Selected tasks that can't go on the job. */
     skipped: { taskId: string; reason: SkipReason }[];
     /** Selected tasks that move off another job. */
     moved: { taskId: string; from: Job }[];
-    /** Farmer visits on the job before and after. */
+    /** Visits (stops) on the job before and after. */
     visitsBefore: number;
     visitsAfter: number;
     overCapacity: boolean;
@@ -440,14 +459,14 @@ export function planAddToJob({ jobs, tasks, taskIds, surveyorId, date, maxVisits
         if (reason) skipped.push({ taskId: id, reason });
         else picked.push(t);
     });
-    const { all, added } = withFarmersOtherTasks(picked, tasks, held, date);
+    const { all, added } = withSubjectsOtherTasks(picked, tasks, held, date);
     const moved = picked.flatMap((t) => {
         const from = held.get(t.id)?.job;
         return from && from.id !== target?.id ? [{ taskId: t.id, from }] : [];
     });
 
-    const before = new Set(target?.stops.map((s) => s.farmerId) ?? []);
-    const after = new Set([...before, ...picked.map((t) => t.farmerId)]);
+    const before = new Set(target?.stops.map((s) => stopKey(s.subject)) ?? []);
+    const after = new Set([...before, ...picked.map((t) => stopKey(t.subject))]);
     return {
         target,
         locked,
@@ -463,7 +482,7 @@ export function planAddToJob({ jobs, tasks, taskIds, surveyorId, date, maxVisits
 
 /**
  * Put tasks on the surveyor's open job for `date`, or on a new created job. Tasks already there keep their place;
- * others move off their editable job. A new farmer becomes a new stop where it adds the least distance (with `route`;
+ * others move off their editable job. A new subject becomes a new stop where it adds the least distance (with `route`;
  * at the end without), most urgent first. Locked target or over capacity: nothing changes.
  */
 export function addToJob(input: AddInput & { newId: string; now: string; by: string; route?: RouteContext }): Job[] {
@@ -477,12 +496,12 @@ export function addToJob(input: AddInput & { newId: string; now: string; by: str
     const job: Job = plan.target
         ? { ...plan.target, stops: plan.target.stops.map((s) => ({ ...s, taskIds: [...s.taskIds] })), updatedAt: input.now }
         : newJob(input.newId, nextJobNo(input.jobs), input.date, input.surveyorId, [], input.now, input.by);
-    const farmerOf = new Map(input.tasks.map((t) => [t.id, t.farmerId]));
+    const subjectOf = new Map(input.tasks.map((t) => [t.id, t.subject]));
     toAdd.forEach((id) => {
-        const farmerId = farmerOf.get(id)!;
-        const stop = job.stops.find((s) => s.farmerId === farmerId);
+        const subject = subjectOf.get(id)!;
+        const stop = job.stops.find((s) => same(s.subject, subject));
         if (stop) stop.taskIds.push(id);
-        else job.stops.splice(input.route ? cheapestPosition(job.stops, farmerId, input.route) : job.stops.length, 0, { farmerId, taskIds: [id] });
+        else job.stops.splice(input.route ? cheapestPosition(job.stops, subject, input.route) : job.stops.length, 0, { subject, taskIds: [id] });
     });
     return plan.target ? jobs.map((j) => (j.id === job.id ? job : j)) : [...jobs, job];
 }
@@ -527,7 +546,7 @@ export interface PlanInput {
 
 /**
  * Plan a day's jobs:
- *  1. one stop per farmer, covering all of that farmer's tasks due that day that no open job holds;
+ *  1. one stop per subject (farmer), covering all of its tasks due that day that no open job holds;
  *  2. most urgent stop first (earliest end date, then oldest planned start);
  *  3. each stop goes to the surveyor with visits left whose start (home, else base village) or stops so far are
  *     nearest (a surveyor with neither starts anywhere), so nearby farmers end up with the same surveyor;
@@ -549,14 +568,14 @@ export function planJobs(input: PlanInput): JobPlan {
         if (reason) skipped.push({ taskId: id, reason });
         else picked.push(t);
     });
-    const { all } = withFarmersOtherTasks(picked, input.tasks, held, input.date);
+    const { all } = withSubjectsOtherTasks(picked, input.tasks, held, input.date);
 
-    // Stops in priority order: the order of each farmer's most urgent task.
+    // Stops in priority order: the order of each subject's most urgent task.
     const stops: { stop: JobStop; location?: LatLng }[] = [];
     all.forEach((t) => {
-        const existing = stops.find((s) => s.stop.farmerId === t.farmerId);
+        const existing = stops.find((s) => same(s.stop.subject, t.subject));
         if (existing) existing.stop.taskIds.push(t.id);
-        else stops.push({ stop: { farmerId: t.farmerId, taskIds: [t.id] }, location: stopLocation(farmerById.get(t.farmerId), input.villages) });
+        else stops.push({ stop: { subject: t.subject, taskIds: [t.id] }, location: subjectLocation(t.subject, farmerById, input.villages) });
     });
 
     const busy = input.surveyors.flatMap((s) => {

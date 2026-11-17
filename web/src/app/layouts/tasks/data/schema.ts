@@ -20,7 +20,7 @@ export interface TaskRecord {
     plannedStart: string;
     /** YYYY-MM-DD; empty = indefinite. */
     plannedEnd?: string;
-    /** "Registration" or "T3 · Collected" (the parent task and the status that created this one). */
+    /** "Start · farmer verified" (workflow start), "T3 · Collected" (the parent task and its status), or "Registration" (older tasks). */
     createdFrom: string;
     parentTaskId?: string;
     /** ISO timestamp */

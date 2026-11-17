@@ -7,8 +7,10 @@
  *
  * Vocabulary
  *  - Workflow step: "survey X runs after survey Y reaches status S, task created <trigger>, valid <from-to>".
- *  - Task: one survey to do for one farmer. It is what flows to the phone app.
+ *  - Task: one survey to do about one subject (a farmer today; other kinds later). It is what flows to the phone app.
  *  - Task status: the survey template's statuses (planned → collected → verified | cancelled | expired).
+ *  - Farmer status: fixed in code (registered → NOC received → verified, or blacklisted). A workflow starts for a
+ *    farmer once they reach its start status (verified by default); registration itself is not part of a workflow.
  */
 
 import type { Workflow, WorkflowStep } from "@/app/layouts/survey-workflow/workflow-store";
@@ -30,7 +32,8 @@ export interface Task {
     workflowId: string;
     stepId: string;
     surveyId: string;
-    farmerId: string;
+    /** What the task is about. Farmers today; other kinds can be added without changing tasks or jobs. */
+    subject: Subject;
     status: string;
     /** YYYY-MM-DD. The app shows the task from this day on. */
     plannedStart: string;
@@ -43,6 +46,22 @@ export interface Task {
     statusComment?: string;
     createdAt: string;
     updatedAt: string;
+}
+
+/** What a task (and a job stop) is about. Only farmers so far; a village, sample, cart or place can join the union. */
+export type Subject = { kind: "farmer"; id: string };
+export const farmerSubject = (id: string): Subject => ({ kind: "farmer", id });
+/** One string per subject, for grouping and comparing ("farmer:farmer_123"). */
+export const subjectKey = (s: Subject) => `${s.kind}:${s.id}`;
+export const sameSubject = (a: Subject, b: Subject) => a.kind === b.kind && a.id === b.id;
+/** The farmer a subject is, if it is one. */
+export const farmerIdOf = (s: Subject | undefined) => (s?.kind === "farmer" ? s.id : undefined);
+
+/** Tasks saved before subjects had `farmerId`; they become farmer subjects. */
+export function migrateTask(t: Task & { farmerId?: string }): Task {
+    if (t.subject || !t.farmerId) return t;
+    const { farmerId, ...rest } = t;
+    return { ...rest, subject: farmerSubject(farmerId) };
 }
 
 export interface LatLng {
@@ -60,7 +79,83 @@ export interface Farmer {
     village: string;
     /** Read from the registration answers (the plot boundary's centre, else a GPS point from older surveys). */
     location?: Located;
+    /** Missing on farmers saved before statuses existed: they count as registered. */
+    status?: FarmerStatus;
+    /** Every status change, oldest first (registration is the first entry). */
+    history?: FarmerEvent[];
+    /** The registration survey's answers, kept on the farmer (registration is not a task). */
+    registration?: { surveyId: string; surveyVersion?: number; response: Record<string, unknown>; at: string; by: string };
     createdAt: string;
+}
+
+/* ------------------------------ Farmer status (fixed in code) ------------------------------ */
+
+export const FARMER_STATUS = {
+    registered: "registered",
+    nocReceived: "noc_received",
+    verified: "verified",
+    blacklisted: "blacklisted",
+} as const;
+export type FarmerStatus = (typeof FARMER_STATUS)[keyof typeof FARMER_STATUS];
+/** Onboarding order (blacklisted sits outside it). */
+export const FARMER_STATUSES: FarmerStatus[] = [FARMER_STATUS.registered, FARMER_STATUS.nocReceived, FARMER_STATUS.verified, FARMER_STATUS.blacklisted];
+export const FARMER_STATUS_LABEL: Record<FarmerStatus, string> = {
+    registered: "Registered",
+    noc_received: "NOC received",
+    verified: "Verified",
+    blacklisted: "Blacklisted",
+};
+/** Statuses a workflow can start on, in onboarding order. */
+export const START_STATUSES: FarmerStatus[] = [FARMER_STATUS.registered, FARMER_STATUS.nocReceived, FARMER_STATUS.verified];
+export const DEFAULT_START_STATUS: FarmerStatus = FARMER_STATUS.verified;
+
+export type FarmerAction = "noc" | "verify" | "blacklist" | "unblacklist";
+
+export interface FarmerEvent {
+    action: "register" | FarmerAction;
+    status: FarmerStatus;
+    at: string;
+    by: string;
+    note?: string;
+}
+
+export const farmerStatusOf = (f: Pick<Farmer, "status"> | undefined): FarmerStatus => f?.status ?? FARMER_STATUS.registered;
+
+/** Who may do what (roles from Masters - Users); the role switcher in the user menu stands in for sign-in. */
+export const FARMER_ACTIONS: Record<FarmerAction, { label: string; from: FarmerStatus[]; roles: string[]; needsNote: boolean }> = {
+    noc: { label: "Mark NOC received", from: [FARMER_STATUS.registered], roles: ["Verifier", "Admin", "Super Admin"], needsNote: false },
+    verify: { label: "Verify", from: [FARMER_STATUS.nocReceived], roles: ["Verifier", "Admin", "Super Admin"], needsNote: false },
+    blacklist: { label: "Blacklist", from: [FARMER_STATUS.registered, FARMER_STATUS.nocReceived, FARMER_STATUS.verified], roles: ["Admin", "Super Admin"], needsNote: true },
+    unblacklist: { label: "Lift blacklist", from: [FARMER_STATUS.blacklisted], roles: ["Admin", "Super Admin"], needsNote: true },
+};
+
+export const canFarmerDo = (farmer: Pick<Farmer, "status">, action: FarmerAction) => FARMER_ACTIONS[action].from.includes(farmerStatusOf(farmer));
+
+/** Status before the blacklist (lifting it goes back there). */
+function statusBeforeBlacklist(farmer: Farmer): FarmerStatus {
+    const events = farmer.history ?? [];
+    for (let i = events.length - 1; i >= 0; i--) {
+        if (events[i].action === "blacklist") return i > 0 ? events[i - 1].status : FARMER_STATUS.registered;
+    }
+    return FARMER_STATUS.registered;
+}
+
+/** Move a farmer along their status. Not allowed from the current status, or a required reason missing: undefined. */
+export function applyFarmerAction(farmer: Farmer, action: FarmerAction, ctx: { by: string; note?: string; now: string }): Farmer | undefined {
+    const rule = FARMER_ACTIONS[action];
+    const note = ctx.note?.trim();
+    if (!canFarmerDo(farmer, action) || (rule.needsNote && !note)) return undefined;
+    const status: FarmerStatus =
+        action === "noc" ? FARMER_STATUS.nocReceived : action === "verify" ? FARMER_STATUS.verified : action === "blacklist" ? FARMER_STATUS.blacklisted : statusBeforeBlacklist(farmer);
+    const event: FarmerEvent = { action, status, at: ctx.now, by: ctx.by, ...(note ? { note } : {}) };
+    return { ...farmer, status, history: [...(farmer.history ?? []), event] };
+}
+
+/** A farmer has reached `start` (or a later onboarding status); blacklisted farmers never have. */
+export function reachedStatus(farmer: Pick<Farmer, "status">, start: FarmerStatus): boolean {
+    const status = farmerStatusOf(farmer);
+    if (status === FARMER_STATUS.blacklisted) return false;
+    return START_STATUSES.indexOf(status) >= START_STATUSES.indexOf(start);
 }
 
 /** YYYY-MM-DD + n days (UTC, so no DST surprises). */
@@ -120,7 +215,7 @@ export function nextTasks({ workflow, task, existing, today, nextTaskNo, newId, 
     const children = workflow.steps.filter((s) => s.parentId === task.stepId && s.onStatus === task.status && s.surveyId !== END_STEP);
     const out: Task[] = [];
     children.forEach((step) => {
-        const dup = existing.some((t) => t.farmerId === task.farmerId && t.stepId === step.id) || out.some((t) => t.stepId === step.id);
+        const dup = existing.some((t) => sameSubject(t.subject, task.subject) && t.stepId === step.id) || out.some((t) => t.stepId === step.id);
         if (dup) return;
         const window = validityFor(step, plannedStartFor(step, today, task.response));
         out.push({
@@ -129,7 +224,7 @@ export function nextTasks({ workflow, task, existing, today, nextTaskNo, newId, 
             workflowId: workflow.id,
             stepId: step.id,
             surveyId: step.surveyId,
-            farmerId: task.farmerId,
+            subject: task.subject,
             status: STATUS.planned,
             ...window,
             parentTaskId: task.id,
@@ -140,12 +235,12 @@ export function nextTasks({ workflow, task, existing, today, nextTaskNo, newId, 
     return out;
 }
 
-/** Tasks for the workflow's first steps (after Start) when a farmer is registered. */
-export function rootTasks(input: Omit<NextTasksInput, "task"> & { farmerId: string }): Task[] {
+/** Tasks for the workflow's first steps (after Start) for one subject (a farmer who reached the start status). */
+export function rootTasks(input: Omit<NextTasksInput, "task"> & { subject: Subject }): Task[] {
     const roots = input.workflow.steps.filter((s) => s.parentId === null && s.surveyId !== END_STEP);
     const out: Task[] = [];
     roots.forEach((step) => {
-        if (input.existing.some((t) => t.farmerId === input.farmerId && t.stepId === step.id)) return;
+        if (input.existing.some((t) => sameSubject(t.subject, input.subject) && t.stepId === step.id)) return;
         const window = validityFor(step, plannedStartFor(step, input.today));
         out.push({
             id: input.newId(out.length),
@@ -153,13 +248,52 @@ export function rootTasks(input: Omit<NextTasksInput, "task"> & { farmerId: stri
             workflowId: input.workflow.id,
             stepId: step.id,
             surveyId: step.surveyId,
-            farmerId: input.farmerId,
+            subject: input.subject,
             status: STATUS.planned,
             ...window,
             createdAt: input.now,
             updatedAt: input.now,
         });
     });
+    return out;
+}
+
+export interface StartInput {
+    workflows: Workflow[];
+    farmers: Farmer[];
+    existing: Task[];
+    today: string;
+    nextTaskNo: number;
+    newId: (i: number) => string;
+    now: string;
+}
+
+/**
+ * Root tasks still missing for farmers who have reached each active workflow's start status (verified unless the
+ * workflow says otherwise). Idempotent: a farmer gets a step's task once, even if it was later cancelled. Run it after
+ * registration, after a farmer status change and when a workflow becomes active.
+ */
+export function workflowStartTasks({ workflows, farmers, existing, today, nextTaskNo, newId, now }: StartInput): Task[] {
+    const out: Task[] = [];
+    workflows
+        .filter((w) => w.status === "active")
+        .forEach((workflow) => {
+            const start = workflow.startOn ?? DEFAULT_START_STATUS;
+            farmers
+                .filter((f) => reachedStatus(f, start))
+                .forEach((farmer) => {
+                    const created = rootTasks({
+                        workflow,
+                        subject: farmerSubject(farmer.id),
+                        existing: [...existing, ...out],
+                        today,
+                        nextTaskNo: nextTaskNo + out.length,
+                        newId: (i) => newId(out.length + i),
+                        now,
+                    });
+                    out.push(...created);
+                });
+        });
     return out;
 }
 

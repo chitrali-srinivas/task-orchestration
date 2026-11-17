@@ -6,8 +6,8 @@
 import * as React from "react";
 import type { TableDataSource } from "@/lib/server-table";
 import { useMockTableDataSource } from "@/mocks/server-table";
-import { STATUS, type Farmer, type Task } from "@/lib/orchestration/engine";
-import { JOB_STATUS, Job, JobStatus, Surveyor, Village, dayStart, routeKm, stopLocation } from "@/lib/orchestration/jobs";
+import { STATUS, farmerIdOf, type Farmer, type Task } from "@/lib/orchestration/engine";
+import { JOB_STATUS, Job, JobStatus, Surveyor, Village, dayStart, routeKm, subjectLocation } from "@/lib/orchestration/jobs";
 import { JobFilters, JobRecord } from "./schema";
 import { createJobsTableConfig } from "./table-config";
 import { jobsApiContract } from "./api-contract";
@@ -31,9 +31,9 @@ export function buildJobRecords(jobs: Job[], tasks: Task[], farmers: Farmer[], s
     const taskById = new Map(tasks.map((t) => [t.id, t]));
     return jobs.map((job) => {
         const surveyor = surveyorById.get(job.surveyorId);
-        const locations = job.stops.map((s) => stopLocation(farmerById.get(s.farmerId), villages));
+        const locations = job.stops.map((s) => subjectLocation(s.subject, farmerById, villages));
         const taskIds = job.stops.flatMap((s) => s.taskIds);
-        const villageList = Array.from(new Set(job.stops.map((s) => farmerById.get(s.farmerId)?.village).filter((v): v is string => Boolean(v))));
+        const villageList = Array.from(new Set(job.stops.map((s) => farmerById.get(farmerIdOf(s.subject) ?? "")?.village).filter((v): v is string => Boolean(v))));
         return {
             id: job.id,
             jobNo: job.jobNo,

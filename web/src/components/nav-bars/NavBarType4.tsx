@@ -13,6 +13,7 @@ import {
     HelpCircle,
     Bug,
     Info,
+    ShieldCheck,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -43,6 +44,8 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -56,6 +59,7 @@ import { NavMain } from "./components/nav-main"
 import { TeamSwitcher } from "@/components/team-switcher"
 import { NavProjects } from "@/components/nav-projects"
 import Image from "next/image"
+import { ROLES, saveRole, useCurrentRole, type Role } from "@/lib/current-role"
 
 import {
     Tooltip,
@@ -107,6 +111,7 @@ function NavBarType4Content({ children, pageTitle, initialActiveItemUrl, pageDes
 
     const [activeItemUrl, setActiveItemUrl] = React.useState(initialActiveItemUrl || "#dashboard")
     const [isProfileOpen, setIsProfileOpen] = React.useState(false)
+    const role = useCurrentRole()
     const [isFranchiseOpen, setIsFranchiseOpen] = React.useState(false)
 
     const filterItems = (items: any[]) => {
@@ -176,6 +181,7 @@ function NavBarType4Content({ children, pageTitle, initialActiveItemUrl, pageDes
                                     <div className="flex flex-col">
                                         <span className="text-sm font-semibold text-zinc-900 leading-tight">{data.user.name}</span>
                                         <span className="text-xs text-zinc-500 leading-tight">{data.user.email}</span>
+                                        <span className="text-[10px] font-semibold uppercase tracking-wider text-sky-700 leading-tight mt-0.5">{role}</span>
                                     </div>
                                     <ChevronDown className={cn(
                                         "ml-1 h-4 w-4 text-zinc-400 transition-all group-hover:text-zinc-900",
@@ -184,6 +190,18 @@ function NavBarType4Content({ children, pageTitle, initialActiveItemUrl, pageDes
                                 </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-64 p-2">
+                                {/* Until sign-in exists, the role decides what this browser may do (lib/current-role.ts). */}
+                                <DropdownMenuLabel className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+                                    <ShieldCheck className="h-3.5 w-3.5" /> Signed in as
+                                </DropdownMenuLabel>
+                                <DropdownMenuRadioGroup value={role} onValueChange={(v) => saveRole(v as Role)}>
+                                    {ROLES.map((r) => (
+                                        <DropdownMenuRadioItem key={r} value={r} className="text-xs" onSelect={(e) => e.preventDefault()}>
+                                            {r}
+                                        </DropdownMenuRadioItem>
+                                    ))}
+                                </DropdownMenuRadioGroup>
+                                <DropdownMenuSeparator />
                                 <DropdownMenuItem className="gap-2">
                                     <User className="h-4 w-4" /> Profile
                                 </DropdownMenuItem>
