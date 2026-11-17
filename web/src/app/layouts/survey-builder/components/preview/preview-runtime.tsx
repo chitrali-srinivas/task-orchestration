@@ -457,8 +457,34 @@ function renderPreviewField(
         case "WholeNumMax100":
         case "WholeNumMax500":
         case "WholeNumMax1000":
+        case "NaturalNumMax200":
         case "NaturalNumMax10000":
+        case "DecimalMax1000000":
+        case "DecimalMax10000000":
             return <PreviewNumber question={question} value={value} onChange={onChange} locale={locale} />;
+
+        case "MobileNumMAX10":
+            return (
+                <input
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    placeholder="10-digit mobile number"
+                    value={typeof value === "string" ? value : ""}
+                    onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    className="w-full h-9 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm"
+                />
+            );
+
+        case "Time":
+            return (
+                <input
+                    type="time"
+                    value={typeof value === "string" ? value : ""}
+                    onChange={(e) => onChange(e.target.value)}
+                    className="w-full h-9 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm"
+                />
+            );
 
         case "Date":
         case "CalendarWithDate":

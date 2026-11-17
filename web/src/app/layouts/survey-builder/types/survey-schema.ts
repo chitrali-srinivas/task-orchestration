@@ -14,6 +14,11 @@ export type QuestionCategory =
     | "advanced";
 
 export type BackendQuestionType =
+    | "Time"
+    | "MobileNumMAX10"
+    | "NaturalNumMax200"
+    | "DecimalMax1000000"
+    | "DecimalMax10000000"
     | "Radio"
     | "Checkbox"
     | "Dropdown"
@@ -339,6 +344,18 @@ export interface QuestionModel {
         }
     >;
     rawLegacyFields?: Record<string, any>; // Preserves any unmodeled backend fields
+    /** Bookkeeping from a production import (lib/production-contract.ts), never written out itself. */
+    production?: ProductionQuestionInfo;
+}
+
+/** What a production import remembers so the export reproduces it (the dependency lists keep their quirks). */
+export interface ProductionQuestionInfo {
+    /** Qn_Deps as question ids ("#<n>" for a number with no question behind it, kept as imported). */
+    depIds: string[];
+    /** The questions that were this one's show-if children (Parent_Dep) at import. */
+    childIds: string[];
+    /** Opt_Dep as imported (parent option indexes), used when the condition can't be matched to an option. */
+    optDep: number[];
 }
 
 export type AvailabilityMode = "always" | "scheduled";
@@ -368,7 +385,7 @@ export interface SurveyAvailabilityConfig {
 
 export interface SurveyModel {
     id: string;
-    /** Built-in surveys defined in code (lib/registration-survey.ts); only a Super Admin edits them. */
+    /** Built-in surveys (production's Farmer_Registration, lib/production-seed.ts); only a Super Admin edits them. */
     systemSurvey?: "farmer_registration";
     azId: string;
     name: string;

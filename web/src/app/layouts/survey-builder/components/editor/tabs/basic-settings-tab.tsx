@@ -18,6 +18,7 @@ import { QUESTION_TYPE_REGISTRY } from "../../../registry/question-type-registry
 import { generateColumnName } from "../../../lib/survey-normalizer";
 import { QuestionTypeHelpPopover } from "../../common/question-type-help-popover";
 import { systemFieldOf } from "../../../lib/system-fields";
+import { isProductionType } from "../../../lib/production-contract";
 
 interface BasicSettingsTabProps {
     question: QuestionModel;
@@ -112,7 +113,8 @@ export function BasicSettingsTab({
                                 <SelectValue placeholder="Select type" />
                             </SelectTrigger>
                             <SelectContent className="max-h-[300px] bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100">
-                                {Object.values(QUESTION_TYPE_REGISTRY).map((type) => (
+                                {/* The field app's types, plus this question's own type if it's an older one. */}
+                                {Object.values(QUESTION_TYPE_REGISTRY).filter((type) => isProductionType(type.id) || type.id === question.type).map((type) => (
                                     <SelectItem key={type.id} value={type.id} className="text-xs">
                                         {type.displayName}
                                     </SelectItem>

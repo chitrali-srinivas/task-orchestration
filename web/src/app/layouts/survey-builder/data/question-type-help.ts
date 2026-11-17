@@ -207,7 +207,67 @@ export const QUESTION_TYPE_HELP_REGISTRY: Record<BackendQuestionType, QuestionTy
         tip: "Automatically blocks 0 and negative numbers from being entered.",
     },
 
+    MobileNumMAX10: {
+        id: "MobileNumMAX10",
+        title: "Mobile Number (10 digits)",
+        whatItDoes: "Numeric keypad for a 10-digit mobile number.",
+        whenToUse: "Use for a farmer's or contact's phone number.",
+        example: {
+            question: "Mobile number",
+            response: "9876543210",
+        },
+        tip: "Only digits; the app expects exactly 10.",
+    },
+
+    NaturalNumMax200: {
+        id: "NaturalNumMax200",
+        title: "Natural Number (1 to 200)",
+        whatItDoes: "Positive counting integers from 1 to 200.",
+        whenToUse: "Use for short counts such as days to crop maturity.",
+        example: {
+            question: "What is the crop maturity period (days)?",
+            response: "120",
+        },
+        tip: "Blocks 0, negatives and values above 200.",
+    },
+
+    DecimalMax1000000: {
+        id: "DecimalMax1000000",
+        title: "Decimal Number (Max 1,000,000)",
+        whatItDoes: "Decimal value up to 1,000,000.",
+        whenToUse: "Use for larger amounts such as household spend.",
+        example: {
+            question: "How much did your household spend on fertilizer?",
+            response: "45000",
+        },
+        tip: "Values above 1,000,000 are rejected.",
+    },
+
+    DecimalMax10000000: {
+        id: "DecimalMax10000000",
+        title: "Decimal Number (Max 10,000,000)",
+        whatItDoes: "Decimal value up to 10,000,000.",
+        whenToUse: "Use for readings that run high, such as odometer readings.",
+        example: {
+            question: "Meter reading at the time of receipt",
+            response: "1254300.5",
+        },
+        tip: "Values above 10,000,000 are rejected.",
+    },
+
     // 4. Date & Time
+    Time: {
+        id: "Time",
+        title: "Time",
+        whatItDoes: "Clock picker for a time of day.",
+        whenToUse: "Use when the hour matters, such as when a delivery arrived.",
+        example: {
+            question: "Time of MATI received",
+            response: "14:30",
+        },
+        tip: "Stored as hours and minutes.",
+    },
+
     Date: {
         id: "Date",
         title: "Date Input",

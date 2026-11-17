@@ -66,7 +66,7 @@ import { UnitSelector } from "./unit-selector";
 import {
     QUESTION_CATEGORIES,
     QUESTION_TYPE_REGISTRY,
-    SIMPLIFIED_QUESTION_TYPES,
+    CREATABLE_QUESTION_TYPES,
 } from "../../registry/question-type-registry";
 import { generateColumnName } from "../../lib/survey-normalizer";
 import { QuestionTypeHelpPopover } from "./question-type-help-popover";
@@ -235,9 +235,9 @@ export function QuestionSelectorModal({
         }
     }, [open, mode, parentQuestion, triggerOption, triggerValue]);
 
-    // Available simplified types
+    // The types the field app renders
     const availableTypes = useMemo(() => {
-        const types = SIMPLIFIED_QUESTION_TYPES.map((typeId) => QUESTION_TYPE_REGISTRY[typeId]).filter(Boolean);
+        const types = CREATABLE_QUESTION_TYPES.map((typeId) => QUESTION_TYPE_REGISTRY[typeId]).filter(Boolean);
         if (mode === "repeater") {
             return types.filter((t) => t.id !== "Repeater_QT");
         }
